@@ -1,0 +1,38 @@
+{% load static %}
+<div id="nav3-edit-root" class="modal-backdrop" aria-hidden="true">
+    <div class="modal modal--sm" role="dialog" aria-modal="true" aria-labelledby="nav3-edit-title">
+        <div class="modal-header">
+            <h3 id="nav3-edit-title" class="modal-title">编辑用户</h3>
+            <button type="button" class="modal-close" data-close="nav3-edit" aria-label="关闭">
+                <img src="{% static 'icons/close.svg' %}" width="16" height="16" alt="" aria-hidden="true">
+            </button>
+        </div>
+        <div class="modal-body">
+            <form id="nav3-edit-form">
+                <div class="nav2-form-row">
+                    <label>用户名</label>
+                    <input class="nav2-input nav2-input-full" type="text" name="username" id="nav3-edit-username"
+                           readonly>
+                </div>
+                <div class="nav2-form-row">
+                    <label>姓名</label>
+                    <input class="nav2-input nav2-input-full" type="text" name="full_name" id="nav3-edit-fullname"
+                           placeholder="请输入姓名">
+                </div>
+                <div class="nav2-form-row">
+                    <label>邮箱</label>
+                    <input class="nav2-input nav2-input-full" type="email" name="email" id="nav3-edit-email"
+                           placeholder="请输入邮箱">
+                </div>
+                <div class="nav2-form-row">
+                    <label for="nav3-edit-is-staff">管理员</label>
+                    <input type="checkbox" id="nav3-edit-is-staff" name="is_staff" value="1">
+                </div>
+                <div class="nav2-form-actions">
+                    <button type="button" class="nav2-btn" data-close="nav3-edit">取消</button>
+                    <button type="submit" class="nav2-btn nav2-primary">保存</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>

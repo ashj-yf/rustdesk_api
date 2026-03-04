@@ -1,0 +1,30 @@
+{% load static %}
+<div id="nav3-reset-root" class="modal-backdrop" aria-hidden="true">
+    <div class="modal modal--sm" role="dialog" aria-modal="true" aria-labelledby="nav3-reset-title">
+        <div class="modal-header">
+            <h3 id="nav3-reset-title" class="modal-title">重置密码</h3>
+            <button type="button" class="modal-close" data-close="nav3-reset" aria-label="关闭">
+                <img src="{% static 'icons/close.svg' %}" width="16" height="16" alt="" aria-hidden="true">
+            </button>
+        </div>
+        <div class="modal-body">
+            <form id="nav3-reset-form">
+                <input type="hidden" name="username" id="nav3-reset-username">
+                <div class="nav2-form-row">
+                    <label for="nav3-reset-pass1">新密码</label>
+                    <input class="nav2-input nav2-input-full" type="password" name="password1" id="nav3-reset-pass1"
+                           placeholder="请输入新密码" required>
+                </div>
+                <div class="nav2-form-row">
+                    <label for="nav3-reset-pass2">确认密码</label>
+                    <input class="nav2-input nav2-input-full" type="password" name="password2" id="nav3-reset-pass2"
+                           placeholder="请再次输入新密码" required>
+                </div>
+                <div class="nav2-form-actions">
+                    <button type="button" class="nav2-btn" data-close="nav3-reset">取消</button>
+                    <button type="submit" class="nav2-btn nav2-primary">确定</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>

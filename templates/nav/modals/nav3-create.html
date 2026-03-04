@@ -1,0 +1,48 @@
+{% load static %}
+<div id="nav3-create-root" class="modal-backdrop" aria-hidden="true">
+    <div class="modal modal--sm" role="dialog" aria-modal="true" aria-labelledby="nav3-create-title">
+        <div class="modal-header">
+            <h3 id="nav3-create-title" class="modal-title">新建用户</h3>
+            <button type="button" class="modal-close" data-close="nav3-create" aria-label="关闭">
+                <img src="{% static 'icons/close.svg' %}" width="16" height="16" alt="" aria-hidden="true">
+            </button>
+        </div>
+        <div class="modal-body">
+            <form id="nav3-create-form">
+                <div class="nav2-form-row">
+                    <label for="nav3-create-username">用户名 *</label>
+                    <input class="nav2-input nav2-input-full" type="text" name="username" id="nav3-create-username"
+                           placeholder="请输入用户名" required>
+                </div>
+                <div class="nav2-form-row">
+                    <label for="nav3-create-fullname">姓名</label>
+                    <input class="nav2-input nav2-input-full" type="text" name="full_name" id="nav3-create-fullname"
+                           placeholder="请输入姓名">
+                </div>
+                <div class="nav2-form-row">
+                    <label for="nav3-create-email">邮箱</label>
+                    <input class="nav2-input nav2-input-full" type="email" name="email" id="nav3-create-email"
+                           placeholder="请输入邮箱">
+                </div>
+                <div class="nav2-form-row">
+                    <label for="nav3-create-pass1">密码 *</label>
+                    <input class="nav2-input nav2-input-full" type="password" name="password1" id="nav3-create-pass1"
+                           placeholder="请输入密码(至少6位)" required>
+                </div>
+                <div class="nav2-form-row">
+                    <label for="nav3-create-pass2">确认密码 *</label>
+                    <input class="nav2-input nav2-input-full" type="password" name="password2" id="nav3-create-pass2"
+                           placeholder="请再次输入密码" required>
+                </div>
+                <div class="nav2-form-row">
+                    <label for="nav3-create-is-staff">管理员</label>
+                    <input type="checkbox" id="nav3-create-is-staff" name="is_staff" value="1">
+                </div>
+                <div class="nav2-form-actions">
+                    <button type="button" class="nav2-btn" data-close="nav3-create">取消</button>
+                    <button type="submit" class="nav2-btn nav2-primary">创建</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
