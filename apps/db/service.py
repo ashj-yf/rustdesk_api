@@ -1,4 +1,3 @@
-import ast
 import json
 import logging
 import time
@@ -18,20 +17,21 @@ from apps.db.models import (
     LoginClient,
     Tag,
     Log,
-    AutidConnLog,
+    AuditConnLog,
     AuditFileLog,
-    UserPrefile,
+    UserProfile,
     Personal,
     Alias,
     ClientTags,
-    SharePersonal,
+    ShareToUser,
+    ShareToGroup,
+    UserConfig,
 )
 from common.error import UserNotFoundError
 from common.utils import get_local_time, get_randem_md5
 
 logger = logging.getLogger(__name__)
 
-# 定义泛型类型变量，用于表示各种模型类型
 ModelType = TypeVar("ModelType", bound=models.Model)
 
 
@@ -77,7 +77,7 @@ class UserService(BaseService):
             'username__in': [*users],
             'is_active': is_active
         }
-        if is_active is None:  # 管理员查询时，如果为None，则可以拉取全部信息
+        if is_active is None:
             _filter.pop('is_active')
         return self.db.objects.filter(**_filter).all()
 
@@ -102,32 +102,32 @@ class UserService(BaseService):
         user.save()
         logger.info(f"创建用户: {user}")
 
-        # 添加用户到组（确保参数顺序正确）
         group_service = GroupService()
         group_service.add_user_to_group(user, group_name=group)
 
-        # 添加一个个人地址簿
         PersonalService().create_self_personal(user)
 
         return user
 
     def set_user_config(self, username, config_key, config_value):
         qs = self.db.objects.filter(username=username).first()
-        qs.user_config.config_name = config_key
-        qs.user_config.config_value = config_value
-        qs.save()
+        UserConfig.objects.update_or_create(
+            user=qs,
+            config_name=config_key,
+            defaults={'config_value': config_value}
+        )
 
     def get_user_config(self, username, config_key=None):
         qs = self.db.objects.filter(username=username).first()
         if not qs:
             return None
-        return qs.user_config.objects.filter(config_name=config_key)
+        return UserConfig.objects.filter(user=qs, config_name=config_key)
 
     def get_user_all_config(self, username):
         qs = self.db.objects.filter(username=username).first()
         if not qs:
             return None
-        return qs.user_config.objects.all()
+        return UserConfig.objects.filter(user=qs).all()
 
     def get_user_by_email(self, email) -> User:
         return self.db.objects.filter(email=email).first()
@@ -156,15 +156,6 @@ class UserService(BaseService):
         logger.info(f"删除用户: {usernames}")
 
     def __get_list(self, **kwargs):
-        """
-        通用分页查询方法
-
-        :param filters: 查询条件字典
-        :param ordering: 排序字段列表
-        :param page: 当前页码
-        :param page_size: 每页记录数
-        :return: 包含分页信息的字典
-        """
         page = int(kwargs.pop("page", 1))
         page_size = int(kwargs.pop("page_size", 10))
 
@@ -220,10 +211,6 @@ class GroupService(BaseService):
         return group
 
     def default_group(self):
-        """
-        创建默认用户组
-        :return:
-        """
         group = self.get_group_by_name(self.default_group_name)
         if not group:
             group = self.create_group(name=self.default_group_name)
@@ -233,8 +220,8 @@ class GroupService(BaseService):
         """
         为用户设置所在组（高效批量）。
 
-        通过一次性查询现有 `UserPrefile`，区分需要更新与新建的记录，分别使用
-        `bulk_update` 与 `bulk_create`，显著减少 SQL 次数，确保“用户仅一个组”。
+        通过一次性查询现有 `UserProfile`，区分需要更新与新建的记录，分别使用
+        `bulk_update` 与 `bulk_create`，显著减少 SQL 次数，确保"用户仅一个组"。
 
         :param username: 用户对象或用户名字符串，可变参数，支持批量
         :param group_name: 目标组对象或组名字符串；为空则加入默认组
@@ -262,12 +249,11 @@ class GroupService(BaseService):
         user_ids = [u.id for u in user_objs]
 
         with transaction.atomic():
-            # 一次性读取已有的 Profile
-            existing_profiles = UserPrefile.objects.filter(user_id__in=user_ids)
+            existing_profiles = UserProfile.objects.filter(user_id__in=user_ids)
             user_id_to_profile = {p.user_id: p for p in existing_profiles}
 
-            to_update: list[UserPrefile] = []
-            to_create: list[UserPrefile] = []
+            to_update: list[UserProfile] = []
+            to_create: list[UserProfile] = []
 
             for u in user_objs:
                 if u.id in user_id_to_profile:
@@ -276,14 +262,12 @@ class GroupService(BaseService):
                         profile.group = group
                         to_update.append(profile)
                 else:
-                    to_create.append(UserPrefile(user=u, group=group))
+                    to_create.append(UserProfile(user=u, group=group))
 
             if to_update:
-                UserPrefile.objects.bulk_update(to_update, ["group"])
-                # logger.info(f"更新用户组: {to_update}")
+                UserProfile.objects.bulk_update(to_update, ["group"])
             if to_create:
-                UserPrefile.objects.bulk_create(to_create)
-                # logger.info(f"创建用户组: {to_create}")
+                UserProfile.objects.bulk_create(to_create)
 
 
 class PeerInfoService(BaseService):
@@ -296,13 +280,6 @@ class PeerInfoService(BaseService):
         return self.db.objects.filter(peer_id=peer_id).first()
 
     def update(self, uuid: str, **kwargs):
-        """
-        创建或更新系统信息
-
-        :param uuid: 设备唯一标识
-        :param kwargs: 系统信息字段
-        :return: (created, object)元组
-        """
         kwargs["uuid"] = uuid
         peer_id = kwargs.get("peer_id")
 
@@ -322,17 +299,10 @@ class HeartBeatService(BaseService):
     db = HeartBeat
 
     MAX_RETRIES = 3
-    RETRY_BACKOFF = 0.15  # 秒，每次重试翻倍
+    RETRY_BACKOFF = 0.15
 
     def update(self, uuid, **kwargs):
-        """
-        更新或创建心跳记录，带 SQLite 锁重试。
-
-        :param uuid: 设备UUID
-        :param kwargs: 需要更新的字段，如 peer_id、ver 等
-        """
         kwargs["modified_at"] = get_local_time()
-        kwargs["timestamp"] = get_local_time()
         kwargs["uuid"] = uuid
         peer_id = kwargs.get("peer_id")
 
@@ -364,8 +334,6 @@ class HeartBeatService(BaseService):
 class LoginClientService(BaseService):
     """
     登录客户端服务类
-
-    用于处理登录客户端的相关业务逻辑
     """
 
     db = LoginClient
@@ -373,38 +341,39 @@ class LoginClientService(BaseService):
     @property
     def platform(self):
         return {
-            'windows': 1,
-            'macos': 2,
-            'linux': 3,
-            'android': 4,
-            'ios': 5,
-            'web': 6,
-            'api': 7,
+            'windows': LoginClient.PLATFORM_WINDOWS,
+            'macos': LoginClient.PLATFORM_MACOS,
+            'linux': LoginClient.PLATFORM_LINUX,
+            'android': LoginClient.PLATFORM_ANDROID,
+            'ios': LoginClient.PLATFORM_IOS,
+            'web': LoginClient.PLATFORM_WEB,
+            'api': LoginClient.PLATFORM_WEB,
         }
 
     @staticmethod
     def client_type(client_type: str):
-        _type = 1 if client_type.lower() == 'web' else 2
-        return _type
+        return LoginClient.CLIENT_TYPE_WEB if client_type.lower() == 'web' else LoginClient.CLIENT_TYPE_CLIENT
 
     def update_login_status(self, username, uuid, platform, client_name, client_type='api', peer_id=None):
         user_qs = self.get_user_info(username)
+        platform_val = self.platform.get(platform, platform) if platform else None
+        client_type_val = self.client_type(client_type)
         if not self.db.objects.filter(user_id=user_qs.id, uuid=uuid).update(
-                user_id=user_qs,
+                user=user_qs,
                 uuid=uuid,
                 peer_id=peer_id,
                 login_status=True,
-                client_type=self.client_type(client_type),
-                platform=self.platform[platform],
+                client_type=client_type_val,
+                platform=platform_val,
                 client_name=client_name,
         ):
             self.db.objects.create(
-                user_id=user_qs,
+                user=user_qs,
                 uuid=uuid,
                 peer_id=peer_id,
                 login_status=True,
-                client_type=client_type,
-                platform=platform,
+                client_type=client_type_val,
+                platform=platform_val,
                 client_name=client_name,
             )
 
@@ -413,18 +382,18 @@ class LoginClientService(BaseService):
     def update_logout_status(self, username, uuid, peer_id=None):
         user_qs = self.get_user_info(username)
         if not self.db.objects.filter(user_id=user_qs.id, uuid=uuid).update(
-                user_id=user_qs,
+                user=user_qs,
                 uuid=uuid,
                 peer_id=peer_id,
                 login_status=False,
         ):
             login_qs = self.db.objects.filter(
-                user_id=user_qs,
+                user=user_qs,
                 uuid=uuid,
                 login_status=True
             ).first()
             self.db.objects.create(
-                user_id=user_qs,
+                user=user_qs,
                 uuid=uuid,
                 peer_id=peer_id,
                 login_status=False,
@@ -442,8 +411,6 @@ class LoginClientService(BaseService):
 class TokenService(BaseService):
     """
     令牌服务类
-
-    用于处理令牌相关的业务逻辑
     """
 
     db = Token
@@ -451,16 +418,16 @@ class TokenService(BaseService):
     def __init__(self, request: HttpRequest | None = None):
         self.request = request
 
-    def create_token(self, username, uuid, client_type=3):
+    def create_token(self, username, uuid, client_type=Token.CLIENT_TYPE_API):
         """
         创建令牌
 
         :param username: 用户名
         :param uuid: 设备UUID
-        :param client_type: 客户端类型 (1, 'web'), (2, 'client'), (3, 'api')
+        :param client_type: 客户端类型字符串
         :return: 令牌
         """
-        assert client_type in [1, 2, 3]
+        assert client_type in [Token.CLIENT_TYPE_WEB, Token.CLIENT_TYPE_CLIENT, Token.CLIENT_TYPE_API]
         user_qs = self.get_user_info(username)
         token = f"{get_randem_md5()}_{username}"
 
@@ -472,7 +439,7 @@ class TokenService(BaseService):
             logger.info(f"更新令牌: user: {username} uuid: {uuid} token: {token}")
         else:
             self.db.objects.create(
-                user_id=user_qs,
+                user=user_qs,
                 uuid=uuid,
                 token=token,
                 client_type=client_type,
@@ -506,13 +473,6 @@ class TokenService(BaseService):
     def renew_token_if_alive(self, uuid, timeout=3600, min_interval=300):
         """
         仅当 token 有效且距上次续期超过 min_interval 秒时才写入。
-
-        用于 heartbeat 中按心跳自动续期，避免每次心跳都触发 DB 写入。
-
-        :param uuid: 设备 UUID
-        :param timeout: token 过期时间（秒），超过则不续期
-        :param min_interval: 最小续期间隔（秒），未达到则跳过写入
-        :returns: 是否实际执行了续期写入
         """
         token_obj = self.db.objects.filter(uuid=uuid).first()
         if not token_obj:
@@ -588,8 +548,6 @@ class TokenService(BaseService):
 class TagService:
     """
     标签服务类
-
-    用于处理标签相关的业务逻辑
     """
 
     db_tag = Tag
@@ -601,45 +559,40 @@ class TagService:
         self.user = UserService().get_user_info(user)
 
     def get_tags_by_name(self, *tag_name):
-        res = self.db_tag.objects.filter(tag__in=tag_name, guid=self.guid).all()
+        res = self.db_tag.objects.filter(tag__in=tag_name, guid_id=self.guid).all()
         logger.debug(f"获取用户标签: {self.guid} - {tag_name} - {res}")
         return res
 
     def get_tags_by_id(self, *tag_id):
-        return self.db_tag.objects.filter(id__in=tag_id, guid=self.guid).all()
+        return self.db_tag.objects.filter(id__in=tag_id, guid_id=self.guid).all()
 
     def create_tag(self, tag, color):
-        res = self.db_tag.objects.create(tag=tag, color=color, guid=self.guid)
+        res = self.db_tag.objects.create(tag=tag, color=color, guid_id=self.guid)
         logger.info(f"创建标签: {self.guid} - {tag} - {color}")
         return res
 
     def delete_tag(self, *tag):
         """
         删除指定标签，并在关系表中移除这些标签（单次批量更新）。
-
-        :param str tag: 一个或多个需要删除的标签名
         """
         tags_to_delete = {str(t) for t in tag if t is not None}
         if not tags_to_delete:
             return
 
-        # 遍历一次构造需要更新的实例，最后单次 bulk_update
         changed_instances = []
-        for inst in self.db_client_tags.objects.filter(guid=self.guid).all():
+        for inst in self.db_client_tags.objects.filter(guid_id=self.guid).all():
             current_tags = self._parse_tags(inst.tags)
             if not current_tags:
                 continue
             new_tags = [t for t in current_tags if t not in tags_to_delete]
             if new_tags != current_tags:
-                # 统一以 JSON 格式写回
-                inst.tags = json.dumps(new_tags)
+                inst.tags = new_tags
                 changed_instances.append(inst)
 
         if changed_instances:
             self.db_client_tags.objects.bulk_update(changed_instances, ["tags"])
 
-        # 删除标签本身
-        self.db_tag.objects.filter(tag__in=tags_to_delete, guid=self.guid).delete()
+        self.db_tag.objects.filter(tag__in=tags_to_delete, guid_id=self.guid).delete()
         logger.info(f"删除标签: {self.guid} - {tags_to_delete}")
 
     def update_tag(self, tag, color=None, new_tag=None):
@@ -648,63 +601,41 @@ class TagService:
             data["color"] = color
         if new_tag:
             data["tag"] = new_tag
-        res = self.db_tag.objects.filter(tag=tag, guid=self.guid).update(**data)
+        res = self.db_tag.objects.filter(tag=tag, guid_id=self.guid).update(**data)
         logger.info(f"更新标签: {self.guid} - {data}")
         return res
 
     def get_all_tags(self):
-        """
-        获取当前用户关联的所有标签
-
-        :return: QuerySet of Tag objects associated with the current user
-        """
-        return self.db_tag.objects.filter(guid=self.guid).all()
+        return self.db_tag.objects.filter(guid_id=self.guid).all()
 
     def set_user_tag_by_peer_id(self, peer_id, tags):
         """
         为指定设备设置标签（覆盖式）。
-
-        :param peer_id: 设备 peer_id
-        :param tags: 标签列表
-        :returns: 更新或创建的记录
         """
         tag_list = []
         for tag in self.get_tags_by_name(*list(tags)):
             tag_list.append(tag.id)
 
-        # if qs := self.db_client_tags.objects.filter(peer_id=peer_id, guid=self.guid).first():
-        if qs := self.user.user_tags.filter(peer_id=peer_id, guid=self.guid).first():
-            qs.tags = str(tag_list if tag_list else [])
+        if qs := self.user.user_tags.filter(peer_id=peer_id, guid_id=self.guid).first():
+            qs.tags = tag_list if tag_list else []
             return qs.save()
 
         kwargs = {
             "peer_id": peer_id,
-            "tags": str(tag_list),
-            "guid": self.guid,
+            "tags": tag_list,
+            "guid_id": self.guid,
         }
         res = self.user.user_tags.create(**kwargs)
         logger.info(f"设置标签: {self.guid} - {peer_id} - {tag_list if tag_list else []}")
         return res
 
     def del_tag_by_peer_id(self, *peer_id):
-        """
-        删除指定设备的标签记录。
-
-        :param peer_id: 一个或多个设备的 peer_id
-        :returns: 删除操作返回的 (rows_deleted, details)
-        """
-        res = self.user.user_tags.filter(peer_id__in=peer_id, guid=self.guid).delete()
+        res = self.user.user_tags.filter(peer_id__in=peer_id, guid_id=self.guid).delete()
         logger.info(f"删除标签: {self.guid} - {peer_id}")
         return res
 
     def get_tags_by_peer_id(self, peer_id) -> list[str]:
-        """
-        获取单个设备的标签列表。
-
-        :param peer_id: 设备 peer_id
-        :returns: 标签字符串列表，若无记录返回空列表
-        """
-        row = self.user.user_tags.filter(peer_id=peer_id, guid=self.guid).values("tags").first()
+        row = self.user.user_tags.filter(peer_id=peer_id, guid_id=self.guid).values("tags").first()
         if not row:
             return []
         return self._parse_tags(row.get("tags"))
@@ -712,17 +643,14 @@ class TagService:
     def get_tags_map(self, peer_ids: list[str]) -> dict[str, list[str]]:
         """
         批量获取多个设备的标签映射，避免 N+1 查询。
-
-        :param peer_ids: 设备 `peer_id` 列表
-        :returns: {peer_id: [tag, ...]} 映射
         """
         if not peer_ids:
             return {}
-        rows = self.db_client_tags.objects.filter(guid=self.guid, peer_id__in=peer_ids).values("peer_id", "tags")
+        rows = self.db_client_tags.objects.filter(guid_id=self.guid, peer_id__in=peer_ids).values("peer_id", "tags")
         logger.debug(f"批量获取标签: {self.guid} peers: {peer_ids} result: {rows}")
         result: dict[str, list[str]] = {}
         for row in rows:
-            tags = eval(row.get("tags") or '[]')
+            tags = self._parse_tags(row.get("tags") or [])
             tags_qs = self.get_tags_by_id(*tags)
             logger.debug(f"标签: {self.guid} peers: {row['peer_id']} tags: {tags} result: {tags_qs}")
             if not tags_qs:
@@ -735,11 +663,7 @@ class TagService:
     def _parse_tags(raw) -> list[str]:
         """
         解析存储在数据库中的标签字段。
-
-        兼容 list 序列化为字符串的存储方式和 JSON 字符串。
-
-        :param raw: 原始存储值（字符串或列表）
-        :returns: 标签字符串列表
+        兼容 JSONField 原生 list 和旧的字符串存储格式。
         """
         if raw is None:
             return []
@@ -748,14 +672,13 @@ class TagService:
         s = str(raw).strip()
         if not s:
             return []
-        # 优先尝试 JSON
         try:
             val = json.loads(s)
             if isinstance(val, list):
                 return [str(x) for x in val]
         except Exception:
             pass
-        # 回退到安全的字面量解析
+        import ast
         try:
             val = ast.literal_eval(s)
             if isinstance(val, list):
@@ -768,30 +691,18 @@ class TagService:
 class LogService(BaseService):
     """
     日志服务类
-
-    用于处理日志相关的业务逻辑
     """
 
     db = Log
 
     def create_log(self, username, uuid, log_type, log_level="info", log_message=""):
-        """
-        创建日志记录
-
-        :param username: 用户名
-        :param uuid: 设备UUID
-        :param log_type: 日志类型
-        :param log_level: 日志级别
-        :param log_message: 日志消息
-        :return: 新创建的日志实例
-        """
         log = self.db.objects.create(
             user_id=self.get_user_info(username).id,
             uuid=uuid,
             log_level=log_level,
-            operation_type=log_type,  # 根据实际需求映射到合适的操作类型
-            operation_object="log",  # 根据实际需求设置操作对象
-            operation_result="success",  # 假设日志创建总是成功的
+            operation_type=log_type,
+            operation_object="log",
+            operation_result="success",
             operation_detail=log_message,
             operation_time=get_local_time(),
         )
@@ -804,13 +715,11 @@ class LogService(BaseService):
 class AuditConnService(BaseService):
     """
     审计连接服务类
-
-    用于处理审计连接相关的业务逻辑
     """
 
-    db = AutidConnLog
+    db = AuditConnLog
 
-    def get(self, conn_id, action="new") -> AutidConnLog:
+    def get(self, conn_id, action="new") -> AuditConnLog:
         return self.db.objects.filter(conn_id=conn_id, action=action).first()
 
     def log(
@@ -824,18 +733,6 @@ class AuditConnService(BaseService):
             type_=0,
             username=None
     ):
-        """
-        记录日志
-        :param username:
-        :param type_:
-        :param controller_peer_id:
-        :param conn_id:
-        :param action:
-        :param controlled_uuid:
-        :param source_ip:
-        :param session_id:
-        :return:
-        """
         if username:
             user_id = self.get_user_info(username).id
         else:
@@ -879,8 +776,6 @@ class AuditConnService(BaseService):
 class AuditFileLogService(BaseService):
     """
     审计文件服务类
-
-    用于处理审计文件相关的业务逻辑
     """
     db = AuditFileLog
 
@@ -934,7 +829,7 @@ class PersonalService(BaseService):
         qs = self.get_user_info(create_user)
         personal = self.db.objects.create(
             personal_name=personal_name,
-            create_user_id=qs,
+            creator=qs,
             personal_type=personal_type,
         )
         personal.personal_user.create(user=create_user)
@@ -997,11 +892,9 @@ class PersonalService(BaseService):
             peer_id = [peer_id]
         peers = PeerInfoService().get_peers(*peer_id)
 
-        # 清掉alias
         alias_service = AliasService()
         alias_service.delete_alias(*peers, guid=guid)
 
-        # 清掉tag
         tag_service = TagService(guid=guid, user=user)
         tag_service.del_tag_by_peer_id(*peer_id)
         res = self.get_personal(guid=guid).personal_peer.filter(peer__in=peers).delete()
@@ -1013,16 +906,6 @@ class AliasService(BaseService):
     db = Alias
 
     def set_alias(self, peer_id, alias, guid):
-        """
-        设置或更新某地址簿下设备的别名。
-
-        :param str peer_id: 设备的 `peer_id`
-        :param str alias: 要设置的别名
-        :param str guid: 地址簿 GUID
-        :returns: None
-        """
-        # 注意：模型字段 `peer_id` 与 `guid` 均为 ForeignKey；
-        # 若直接赋字符串会被认为是传入关联对象，需使用 `<field>_id` 列名进行原值写入
         kwargs = {
             "peer_id_id": peer_id,
             "guid_id": guid,
@@ -1037,13 +920,6 @@ class AliasService(BaseService):
         return self.db.objects.filter(guid=guid).all()
 
     def get_alias_map(self, guid: str, peer_ids: list[str]) -> dict[str, str]:
-        """
-        批量获取某地址簿下多个设备的别名映射。
-
-        :param guid: 地址簿 GUID
-        :param peer_ids: 设备 `peer_id` 列表
-        :returns: {peer_id: alias} 映射字典，未设置别名的设备不会出现在字典中
-        """
         if not peer_ids:
             return {}
         rows = self.db.objects.filter(guid=guid, peer_id__in=peer_ids).values("peer_id", "alias")
@@ -1054,58 +930,65 @@ class AliasService(BaseService):
 
 
 class SharePersonalService(BaseService):
-    db = SharePersonal
+    """
+    地址簿分享服务类 - 使用新的 ShareToUser / ShareToGroup 表
+    """
 
     def __init__(self, count_user: User):
         self.user = count_user
 
     def share_to_user(self, guid, username):
         user = PersonalService().get_user_info(username)
-        return self.db.objects.create(
-            guid=guid,
-            to_share_id=user.id,
-            to_share_type=1,
-            from_share_id=self.user.id,
-            from_share_type=1,
+        return ShareToUser.objects.create(
+            personal_id=guid,
+            to_user=user,
+            from_user=self.user,
         )
 
     def share_to_group(self, guid, group_name):
         group = GroupService().get_group_by_name(group_name)
-        return self.db.objects.create(
-            guid=guid,
-            to_share_id=group.id,
-            to_share_type=2,
-            from_share_id=self.user.id,
-            from_share_type=1,
+        return ShareToGroup.objects.create(
+            personal_id=guid,
+            to_group=group,
+            from_user=self.user,
         )
 
     def get_user_personals(self):
         group_id = self.user.userprofile.group_id
-        personal_ids = self.db.objects.filter(
-            to_share_id__in=(self.user.id, group_id),
-            to_share_type__in=(1, 2),
-        ).values_list("guid", flat=True)
 
-        return PersonalService.db.objects.filter(guid__in=personal_ids).all()
+        user_share_guids = ShareToUser.objects.filter(
+            to_user=self.user
+        ).values_list("personal_id", flat=True)
+
+        group_share_guids = ShareToGroup.objects.filter(
+            to_group_id=group_id
+        ).values_list("personal_id", flat=True)
+
+        all_guids = set(user_share_guids) | set(group_share_guids)
+
+        return PersonalService.db.objects.filter(guid__in=all_guids).all()
 
 
-class UserConfig(BaseService):
+class UserConfigService(BaseService):
+    """
+    用户配置服务类
+    """
     def __init__(self, user: User | str):
         self.user = self.get_user_info(user)
 
     def get_config(self):
-        return self.user.user_config.objects.all()
+        return UserConfig.objects.filter(user=self.user).all()
 
     def set_language(self, language):
-        self.user.user_config.objects.update_or_create(
+        UserConfig.objects.update_or_create(
             user=self.user,
+            config_name='language',
             defaults={
-                "config_name": 'language',
                 "config_value": language
             }
         )
 
     def get_language(self):
-        if qs := self.user.user_config.objects.filter(config_name='language').first():
+        if qs := UserConfig.objects.filter(user=self.user, config_name='language').first():
             return qs.config_value
         return None

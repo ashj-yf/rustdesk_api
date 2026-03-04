@@ -51,7 +51,7 @@ def create_personal(request: HttpRequest) -> JsonResponse:
 
     # 检查是否已存在同名地址簿
     existing = Personal.objects.filter(
-        create_user_id=request.user.id,
+        creator=request.user,
         personal_name=personal_name
     ).first()
     if existing:
@@ -60,7 +60,7 @@ def create_personal(request: HttpRequest) -> JsonResponse:
     # 创建地址簿
     personal = Personal.objects.create(
         personal_name=personal_name,
-        create_user_id=request.user.id,
+        creator=request.user,
         personal_type=personal_type
     )
 
@@ -120,7 +120,7 @@ def rename_personal(request: HttpRequest) -> JsonResponse:
 
     # 检查新名称是否已存在
     existing = Personal.objects.filter(
-        create_user_id=request.user.id,
+        creator=request.user,
         personal_name=new_name
     ).exclude(guid=guid).first()
     if existing:
@@ -172,7 +172,7 @@ def personal_detail(request: HttpRequest) -> JsonResponse:
         ).exists()
 
         # 获取该设备在该地址簿中的标签
-        client_tags = ClientTags.objects.filter(peer_id=peer.peer_id, guid=guid).first()
+        client_tags = ClientTags.objects.filter(peer_id=peer.peer_id, guid_id=guid).first()
         tags = client_tags.tags if client_tags else ''
 
         devices.append({
@@ -367,17 +367,14 @@ def update_device_tags_in_personal(request: HttpRequest) -> JsonResponse:
     if not peer:
         return JsonResponse({'ok': False, 'err_msg': '设备不存在'}, status=404)
 
-    # 更新标签（在ClientTags表中）
-    # 先删除该设备在该地址簿的所有标签
-    ClientTags.objects.filter(peer_id=peer_id, guid=guid).delete()
+    ClientTags.objects.filter(peer_id=peer_id, guid_id=guid).delete()
 
-    # 如果有新标签，则添加
     if tags_text:
         ClientTags.objects.create(
             user=request.user,
             peer_id=peer_id,
             tags=tags_text,
-            guid=guid
+            guid_id=guid
         )
 
     return JsonResponse({'ok': True})

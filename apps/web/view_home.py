@@ -130,7 +130,7 @@ def nav_content(request: HttpRequest) -> HttpResponse:
             tags=Subquery(
                 ClientTags.objects.filter(
                     peer_id=OuterRef('peer_id'),
-                    user_id=request.user.id
+                    user=request.user
                 ).values('tags')[:1]
             )
         ).order_by('-created_at')
@@ -203,7 +203,7 @@ def nav_content(request: HttpRequest) -> HttpResponse:
         personal_type = (request.GET.get('type') or '').strip()
 
         # 查询当前用户的地址簿（包括自己创建的和被分享的）
-        personal_qs = Personal.objects.filter(create_user_id=request.user.id).order_by('-created_at')
+        personal_qs = Personal.objects.filter(creator=request.user).order_by('-created_at')
 
         # 搜索过滤（使用guid进行搜索）
         if q:
@@ -261,7 +261,7 @@ def rename_alias(request: HttpRequest) -> JsonResponse:
         return JsonResponse({'ok': False, 'err_msg': '设备不存在'}, status=404)
     # 获取或创建默认地址簿（私有）
     personal, _ = Personal.objects.get_or_create(
-        create_user_id=request.user.id,
+        creator=request.user,
         personal_type='private',
         personal_name='默认地址簿',
         defaults={}
@@ -294,7 +294,7 @@ def device_detail(request: HttpRequest) -> JsonResponse:
         return JsonResponse({'ok': False, 'err_msg': '设备不存在'}, status=404)
     # 默认地址簿下的 alias（若无则回退任意一个 alias）
     default_personal = Personal.objects.filter(
-        create_user_id=request.user.id,
+        creator=request.user,
         personal_type='private',
         personal_name='默认地址簿'
     ).first()
@@ -306,7 +306,7 @@ def device_detail(request: HttpRequest) -> JsonResponse:
         alias_text = alias_qs.values_list('alias', flat=True).first()
     alias_text = alias_text or ''
     # 当前用户下的标签（可能多条）
-    tag_list = list(ClientTags.objects.filter(user_id=request.user.id, peer_id=peer_id).values_list('tags', flat=True))
+    tag_list = list(ClientTags.objects.filter(user=request.user, peer_id=peer_id).values_list('tags', flat=True))
     # 构造响应
     data = {
         'peer_id': peer.peer_id,
@@ -349,7 +349,7 @@ def update_device(request: HttpRequest) -> JsonResponse:
 
     # 获取/创建默认地址簿（私有）
     personal, _ = Personal.objects.get_or_create(
-        create_user_id=request.user.id,
+        creator=request.user,
         personal_type='private',
         personal_name='默认地址簿',
         defaults={}
@@ -382,14 +382,14 @@ def update_device(request: HttpRequest) -> JsonResponse:
         joined = ', '.join(uniq)
         if joined:
             ClientTags.objects.update_or_create(
-                user_id=request.user.id,
+                user=request.user,
                 peer_id=peer_id,
-                guid=personal.guid,
+                guid=personal,
                 defaults={'tags': joined}
             )
         else:
             # 空表示清空标签
-            ClientTags.objects.filter(user_id=request.user.id, peer_id=peer_id, guid=personal.guid).delete()
+            ClientTags.objects.filter(user=request.user, peer_id=peer_id, guid=personal).delete()
 
     return JsonResponse({'ok': True})
 
