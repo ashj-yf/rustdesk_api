@@ -43,8 +43,8 @@ stages:
               - detail
             type: dingtalk
         strategy:
-          retry: '0'
-          resource: '{"limits":{"cpu":"4","memory":"8"}}'
+          retry: '1'
+          resource: '{"limits":{"cpu":"8","memory":"16"}}'
       - step: build@docker
         name: build_docker
         displayName: 镜像构建指定版本
@@ -74,5 +74,5 @@ stages:
               - detail
             type: dingtalk
         strategy:
-          retry: '0'
-          resource: '{"limits":{"cpu":"4","memory":"8"}}'
+          retry: '1'
+          resource: '{"limits":{"cpu":"8","memory":"16"}}'
