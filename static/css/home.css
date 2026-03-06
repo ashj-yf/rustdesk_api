@@ -208,6 +208,12 @@ body {
     min-height: 40px;
 }
 
+.modal-header-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
 .modal-close {
     appearance: none;
     border: 1px solid var(--color-border);

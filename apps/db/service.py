@@ -29,6 +29,11 @@ from apps.db.models import (
     ShareToGroup,
     UserConfig,
     DeviceGroup,
+    DevicePermission,
+    Role,
+    UserRole,
+    DeviceGroupPeer,
+    GroupRole,
 )
 from common.error import UserNotFoundError
 from common.utils import get_local_time, get_randem_md5
@@ -109,6 +114,8 @@ class UserService(BaseService):
         group_service.add_user_to_group(user, group_name=group)
 
         PersonalService().create_self_personal(user)
+
+        RoleService().assign_role_to_user(user, RoleService().get_default_role())
 
         return user
 
@@ -1283,22 +1290,16 @@ class DeviceGroupService(BaseService):
 
     def get_accessible_groups(self, user: User) -> list[DeviceGroup]:
         """
-        获取用户可访问的设备组
+        获取用户可访问的设备组（基于全局权限）
+
+        拥有 VIEW 权限时返回所有设备组，否则返回空列表。
 
         :param user: 用户对象
         :return: 设备组列表
         """
-        if user.is_superuser:
+        if PermissionService().has_perm(user, DevicePermission.VIEW):
             return list(self.db.objects.all())
-        return list(
-            self.db.objects.filter(
-                peers__in=PeerInfo.objects.filter(
-                    peer_id__in=LoginClient.objects.filter(
-                        user=user, login_status=True
-                    ).values_list('peer_id', flat=True)
-                )
-            ).distinct()
-        )
+        return []
 
     def get_list(self, page: int = 1, page_size: int = 100) -> dict:
         """
@@ -1359,3 +1360,310 @@ class UserConfigService(BaseService):
             config_name='legacy_ab',
             defaults={"config_value": data}
         )
+
+
+# ---------------------------------------------------------------------------
+# 权限系统服务
+# ---------------------------------------------------------------------------
+
+
+class RoleService(BaseService):
+    """
+    角色管理服务
+
+    提供角色的 CRUD、用户与角色的绑定/解绑操作。
+    """
+
+    db = Role
+
+    def create_role(self, name: str, note: str = "", permission: int = 0) -> Role:
+        """
+        创建角色
+
+        :param name: 角色名称
+        :param note: 备注
+        :param permission: 全局权限位（DevicePermission bitflag 并集）
+        :return: 新角色对象
+        :rtype: Role
+        """
+        role = self.db.objects.create(name=name, note=note, permission=permission)
+        logger.info(f"创建角色: {name}")
+        return role
+
+    def update_role(self, role_id: int, **kwargs) -> Role | None:
+        """
+        更新角色信息
+
+        :param role_id: 角色 ID
+        :return: 更新后的角色对象，不存在返回 None
+        :rtype: Role | None
+        """
+        role = self.db.objects.filter(id=role_id).first()
+        if not role:
+            return None
+        if role.is_default and "name" in kwargs:
+            kwargs.pop("name")
+        for field, value in kwargs.items():
+            setattr(role, field, value)
+        role.save()
+        logger.info(f"更新角色: id={role_id}, fields={list(kwargs.keys())}")
+        return role
+
+    def delete_role(self, role_id: int) -> bool:
+        """
+        删除角色（default 角色不可删除）
+
+        :param role_id: 角色 ID
+        :return: 是否删除成功
+        :rtype: bool
+        """
+        role = self.db.objects.filter(id=role_id).first()
+        if not role or role.is_default:
+            return False
+        role.delete()
+        logger.info(f"删除角色: {role.name}")
+        return True
+
+    def get_default_role(self) -> Role:
+        """
+        获取默认角色，不存在则创建
+
+        :return: 默认角色对象
+        :rtype: Role
+        """
+        role, _ = self.db.objects.get_or_create(
+            name="default",
+            defaults={"note": "默认角色", "is_default": True},
+        )
+        return role
+
+    def list_roles(self):
+        """
+        获取所有角色列表
+
+        :return: 角色查询集
+        :rtype: QuerySet[Role]
+        """
+        return self.db.objects.all()
+
+    def get_role_by_id(self, role_id: int) -> Role | None:
+        """
+        根据 ID 获取角色
+
+        :param role_id: 角色 ID
+        :return: 角色对象或 None
+        :rtype: Role | None
+        """
+        return self.db.objects.filter(id=role_id).first()
+
+    def assign_role_to_user(self, user: User | str, role: Role | int) -> None:
+        """
+        为用户分配角色
+
+        :param user: 用户对象或用户名
+        :param role: 角色对象或角色 ID
+        """
+        user = self.get_user_info(user)
+        if isinstance(role, int):
+            role = self.get_role_by_id(role)
+        if user and role:
+            UserRole.objects.get_or_create(user=user, role=role)
+            logger.info(f"为用户 {user.username} 分配角色 {role.name}")
+
+    def remove_role_from_user(self, user: User | str, role: Role | int) -> None:
+        """
+        移除用户的角色
+
+        :param user: 用户对象或用户名
+        :param role: 角色对象或角色 ID
+        """
+        user = self.get_user_info(user)
+        if isinstance(role, int):
+            role = self.get_role_by_id(role)
+        if user and role:
+            UserRole.objects.filter(user=user, role=role).delete()
+            logger.info(f"移除用户 {user.username} 的角色 {role.name}")
+
+    def get_user_roles(self, user: User | str) -> list[Role]:
+        """
+        获取用户的所有角色
+
+        :param user: 用户对象或用户名
+        :return: 角色列表
+        :rtype: list[Role]
+        """
+        user = self.get_user_info(user)
+        if not user:
+            return []
+        return list(
+            self.db.objects.filter(role_users__user=user)
+        )
+
+    def get_role_users(self, role: Role | int):
+        """
+        获取拥有指定角色的所有用户
+
+        :param role: 角色对象或角色 ID
+        :return: 用户查询集
+        :rtype: QuerySet[User]
+        """
+        role_id = role.id if isinstance(role, Role) else role
+        return User.objects.filter(user_roles__role_id=role_id)
+
+    def assign_role_to_group(self, group: Group | int, role_id: int) -> None:
+        """
+        为用户组分配角色
+
+        :param group: 用户组对象或用户组 ID
+        :param role_id: 角色 ID
+        """
+        group_id = group.id if isinstance(group, Group) else group
+        GroupRole.objects.get_or_create(group_id=group_id, role_id=role_id)
+        logger.info(f"为用户组 {group_id} 分配角色 {role_id}")
+
+    def remove_role_from_group(self, group: Group | int, role_id: int) -> None:
+        """
+        移除用户组的角色
+
+        :param group: 用户组对象或用户组 ID
+        :param role_id: 角色 ID
+        """
+        group_id = group.id if isinstance(group, Group) else group
+        GroupRole.objects.filter(group_id=group_id, role_id=role_id).delete()
+        logger.info(f"移除用户组 {group_id} 的角色 {role_id}")
+
+    def get_group_roles(self, group: Group | int) -> list[Role]:
+        """
+        获取用户组的所有角色
+
+        :param group: 用户组对象或用户组 ID
+        :return: 角色列表
+        :rtype: list[Role]
+        """
+        group_id = group.id if isinstance(group, Group) else group
+        return list(
+            self.db.objects.filter(role_groups__group_id=group_id)
+        )
+
+
+class DeviceGroupPeerService(BaseService):
+    """
+    设备-设备组关联服务
+
+    管理设备与设备组的多对多关系。当前 Service 层限制一个设备只能属于一个组。
+    """
+
+    db = DeviceGroupPeer
+
+    def add_peer_to_group(self, peer: PeerInfo | int, group: DeviceGroup | int) -> DeviceGroupPeer | None:
+        """
+        将设备加入设备组（当前限制一对多：设备已有组则拒绝）
+
+        :param peer: 设备对象或设备 ID
+        :param group: 设备组对象或设备组 ID
+        :return: 创建的关联对象，已有组则返回 None
+        :rtype: DeviceGroupPeer | None
+        """
+        peer_id = peer.id if isinstance(peer, PeerInfo) else peer
+        group_id = group.id if isinstance(group, DeviceGroup) else group
+
+        if self.db.objects.filter(peer_id=peer_id).exists():
+            logger.warning(f"设备 {peer_id} 已属于某个设备组，不可重复加入")
+            return None
+
+        obj = self.db.objects.create(peer_id=peer_id, device_group_id=group_id)
+        logger.info(f"设备 {peer_id} 加入设备组 {group_id}")
+        return obj
+
+    def remove_peer_from_group(self, peer: PeerInfo | int, group: DeviceGroup | int) -> bool:
+        """
+        将设备从设备组移除
+
+        :param peer: 设备对象或设备 ID
+        :param group: 设备组对象或设备组 ID
+        :return: 是否移除成功
+        :rtype: bool
+        """
+        peer_id = peer.id if isinstance(peer, PeerInfo) else peer
+        group_id = group.id if isinstance(group, DeviceGroup) else group
+        count, _ = self.db.objects.filter(peer_id=peer_id, device_group_id=group_id).delete()
+        return count > 0
+
+    def get_groups_for_peer(self, peer: PeerInfo | int) -> list[DeviceGroup]:
+        """
+        获取设备所属的所有设备组
+
+        :param peer: 设备对象或设备 ID
+        :return: 设备组列表
+        :rtype: list[DeviceGroup]
+        """
+        peer_id = peer.id if isinstance(peer, PeerInfo) else peer
+        return list(
+            DeviceGroup.objects.filter(group_peers__peer_id=peer_id)
+        )
+
+    def get_peers_in_group(self, group: DeviceGroup | int):
+        """
+        获取设备组内所有设备
+
+        :param group: 设备组对象或设备组 ID
+        :return: 设备查询集
+        :rtype: QuerySet[PeerInfo]
+        """
+        group_id = group.id if isinstance(group, DeviceGroup) else group
+        return PeerInfo.objects.filter(peer_groups__device_group_id=group_id)
+
+    def get_group_ids_for_peer(self, peer: PeerInfo | int) -> set[int]:
+        """
+        获取设备所属设备组的 ID 集合
+
+        :param peer: 设备对象或设备 ID
+        :return: 设备组 ID 集合
+        :rtype: set[int]
+        """
+        peer_id = peer.id if isinstance(peer, PeerInfo) else peer
+        return set(
+            self.db.objects.filter(peer_id=peer_id).values_list("device_group_id", flat=True)
+        )
+
+
+class PermissionService(BaseService):
+    """
+    全局权限服务
+
+    用户最终权限 = 直接角色权限并集 | 所属用户组角色权限并集。
+    superuser 拥有所有权限。
+    """
+
+    def get_user_effective_perm(self, user: User) -> int:
+        """
+        计算用户的全局有效权限值
+
+        :param user: 用户对象
+        :return: 权限位值
+        :rtype: int
+        """
+        if user.is_superuser:
+            return DevicePermission.FULL
+        perm = 0
+        for role_perm in UserRole.objects.filter(user=user).values_list('role__permission', flat=True):
+            perm |= role_perm
+        try:
+            group_id = user.userprofile.group_id
+        except (UserProfile.DoesNotExist, AttributeError):
+            group_id = None
+        if group_id:
+            for role_perm in GroupRole.objects.filter(group_id=group_id).values_list('role__permission', flat=True):
+                perm |= role_perm
+        return perm
+
+    def has_perm(self, user: User, perm_flag: int) -> bool:
+        """
+        判断用户是否拥有指定全局权限
+
+        :param user: 用户对象
+        :param perm_flag: 权限位（如 DevicePermission.VIEW）
+        :return: 是否拥有权限
+        :rtype: bool
+        """
+        return (self.get_user_effective_perm(user) & perm_flag) == perm_flag

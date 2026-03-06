@@ -1,6 +1,6 @@
 from django.urls import path
 
-from apps.web import view_auth, view_home, view_user, view_personal
+from apps.web import view_auth, view_home, view_user, view_personal, view_permission
 
 urlpatterns = [
     path('', view_auth.index),
@@ -30,4 +30,17 @@ urlpatterns = [
     path('personal/remove-device', view_personal.remove_device_from_personal, name='web_personal_remove_device'),
     path('personal/update-alias', view_personal.update_device_alias_in_personal, name='web_personal_update_alias'),
     path('personal/update-tags', view_personal.update_device_tags_in_personal, name='web_personal_update_tags'),
+    # 角色管理
+    path('role/list', view_permission.role_list, name='web_role_list'),
+    path('role/create', view_permission.role_create, name='web_role_create'),
+    path('role/update', view_permission.role_update, name='web_role_update'),
+    path('role/delete', view_permission.role_delete, name='web_role_delete'),
+    # 用户-角色
+    path('role/user-roles', view_permission.user_roles, name='web_user_roles'),
+    path('role/assign', view_permission.user_role_assign, name='web_role_assign'),
+    path('role/remove', view_permission.user_role_remove, name='web_role_remove'),
+    # 用户组-角色
+    path('group-role/list', view_permission.group_roles, name='web_group_roles'),
+    path('group-role/assign', view_permission.group_role_assign, name='web_group_role_assign'),
+    path('group-role/remove', view_permission.group_role_remove, name='web_group_role_remove'),
 ]

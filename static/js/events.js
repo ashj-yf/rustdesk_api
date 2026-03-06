@@ -33,6 +33,10 @@
         return APP.nav4 || {};
     }
 
+    function getPerm() {
+        return APP.perm || {};
+    }
+
     function getConstants() {
         return {
             STORAGE_KEY: APP.STORAGE_KEY || 'homeActiveNavKey',
@@ -138,7 +142,6 @@
             }
         }, false);
 
-        // nav-2 行级"更多"按钮 → 打开右键菜单
         contentEl.addEventListener('click', function (e) {
             const btn = e.target.closest('.nav2-row-action[data-action="more"]');
             if (!btn) return;
@@ -151,7 +154,6 @@
             showContextMenu(peerId, rect.left, rect.bottom + 4);
         }, false);
 
-        // nav-2 右键菜单事件
         contentEl.addEventListener('contextmenu', function (e) {
             const row = e.target.closest('.nav2-table tbody tr[data-peer-id]');
             if (!row) return;
@@ -162,7 +164,6 @@
             showContextMenu(peerId, e.clientX, e.clientY);
         }, false);
 
-        // 右键菜单项点击
         document.addEventListener('click', function (e) {
             const item = e.target.closest('.nav2-context-item');
             if (item) {
@@ -176,7 +177,6 @@
             hideContextMenu();
         }, false);
 
-        // nav-2 批量操作工具栏
         contentEl.addEventListener('click', function (e) {
             const btn = e.target.closest('[data-batch]');
             if (!btn) return;
@@ -204,7 +204,6 @@
             }
         }, false);
 
-        // nav-2 批量选择关闭
         contentEl.addEventListener('click', function (e) {
             if (!e.target.closest('#nav2-multi-close')) return;
             e.preventDefault();
@@ -212,7 +211,6 @@
             clearSelection();
         }, false);
 
-        // nav-2 标签过滤面板
         contentEl.addEventListener('click', function (e) {
             const item = e.target.closest('.nav2-tag-item');
             if (!item) return;
@@ -222,7 +220,6 @@
             setTagFilter(tag);
         }, false);
 
-        // nav-2 删除确认
         contentEl.addEventListener('click', function (e) {
             if (!e.target.closest('#nav2-delete-confirm-btn')) return;
             e.preventDefault();
@@ -286,7 +283,6 @@
             startInlineEdit(container, 'alias', peer);
         }, false);
 
-        // nav-2 重命名表单
         contentEl.addEventListener('submit', function (e) {
             const {showToast, postForm} = getUtils();
             const {close: closeModal} = getModal();
@@ -311,7 +307,6 @@
             });
         }, false);
 
-        // nav-2 备注表单
         contentEl.addEventListener('submit', function (e) {
             const formEl = e.target;
             if (!formEl || formEl.id !== 'nav2-note-form') return;
@@ -320,7 +315,6 @@
             submitNote();
         }, false);
 
-        // nav-2 搜索表单
         contentEl.addEventListener('submit', function (e) {
             const formEl = e.target;
             if (!formEl || formEl.id !== 'nav2-search-form') return;
@@ -360,7 +354,6 @@
             reloadNav('nav-3', collectQueryOptions(formEl));
         }, false);
 
-        // nav-3 行级操作
         contentEl.addEventListener('click', function (e) {
             const {showToast, postForm} = getUtils();
             const {open: openModal} = getModal();
@@ -392,6 +385,9 @@
                 if (p1) p1.value = '';
                 if (p2) p2.value = '';
                 openModal('nav3-reset-root');
+            } else if (action === 'roles') {
+                const {openAssignRole} = getPerm();
+                if (openAssignRole) openAssignRole(username);
             } else if (action === 'delete') {
                 if (!confirm(`确定要删除用户"${username}"吗？删除后该用户将无法登录。`)) return;
                 postForm(URLS.USER_DELETE, {username: username}).then(() => {
@@ -404,7 +400,6 @@
             }
         }, false);
 
-        // nav-3 编辑表单
         contentEl.addEventListener('submit', function (e) {
             const {showToast, postForm} = getUtils();
             const {close: closeModal} = getModal();
@@ -432,7 +427,6 @@
             });
         }, false);
 
-        // nav-3 重置密码表单
         contentEl.addEventListener('submit', function (e) {
             const {showToast, postForm} = getUtils();
             const {close: closeModal} = getModal();
@@ -461,7 +455,6 @@
             });
         }, false);
 
-        // nav-3 新建用户按钮
         contentEl.addEventListener('click', function (e) {
             const {open: openModal} = getModal();
             const btn = e.target.closest('.nav3-create-btn');
@@ -472,7 +465,6 @@
             openModal('nav3-create-root');
         }, false);
 
-        // nav-3 新建用户表单
         contentEl.addEventListener('submit', function (e) {
             const {showToast, postForm} = getUtils();
             const {close: closeModal} = getModal();
@@ -516,6 +508,70 @@
             });
         }, false);
 
+        // ========== nav-3 角色管理事件 ==========
+
+        contentEl.addEventListener('click', function (e) {
+            const btn = e.target.closest('.nav3-role-manage-btn');
+            if (!btn) return;
+            e.preventDefault();
+            const {openRoleManager} = getPerm();
+            if (openRoleManager) openRoleManager();
+        }, false);
+
+        contentEl.addEventListener('click', function (e) {
+            const btn = e.target.closest('.nav3-role-add-btn');
+            if (!btn) return;
+            e.preventDefault();
+            const {openRoleEditor} = getPerm();
+            if (openRoleEditor) openRoleEditor(null, '', '', 0);
+        }, false);
+
+        contentEl.addEventListener('click', function (e) {
+            const btn = e.target.closest('.nav3-role-edit-btn');
+            if (!btn) return;
+            e.preventDefault();
+            const {openRoleEditor} = getPerm();
+            if (openRoleEditor) openRoleEditor(btn.dataset.id, btn.dataset.name, btn.dataset.note, btn.dataset.permission);
+        }, false);
+
+        contentEl.addEventListener('submit', function (e) {
+            const formEl = e.target;
+            if (!formEl || formEl.id !== 'nav3-role-edit-form') return;
+            e.preventDefault();
+            const {submitRoleEditor} = getPerm();
+            if (submitRoleEditor) submitRoleEditor();
+        }, false);
+
+        contentEl.addEventListener('click', function (e) {
+            const btn = e.target.closest('.nav3-role-delete-btn');
+            if (!btn) return;
+            e.preventDefault();
+            const {deleteRole} = getPerm();
+            if (deleteRole) deleteRole(btn.dataset.id);
+        }, false);
+
+        contentEl.addEventListener('change', function (e) {
+            const cb = e.target.closest('.nav3-assign-role-cb');
+            if (!cb) return;
+            const username = (document.getElementById('nav3-assign-role-username')?.value || '').trim();
+            if (!username) return;
+            const roleId = cb.getAttribute('data-role-id');
+            const {toggleUserRole} = getPerm();
+            if (toggleUserRole) toggleUserRole(username, roleId, cb.checked);
+        }, false);
+
+        // ========== nav-3 用户组角色分配事件 ==========
+
+        contentEl.addEventListener('change', function (e) {
+            const cb = e.target.closest('.nav3-assign-group-role-cb');
+            if (!cb) return;
+            const groupId = (document.getElementById('nav3-assign-group-role-id')?.value || '').trim();
+            if (!groupId) return;
+            const roleId = cb.getAttribute('data-role-id');
+            const {toggleGroupRole} = getPerm();
+            if (toggleGroupRole) toggleGroupRole(groupId, roleId, cb.checked);
+        }, false);
+
         // ========== nav-4 事件 ==========
 
         contentEl.addEventListener('click', function (e) {
@@ -547,7 +603,6 @@
             reloadNav('nav-4', collectQueryOptions(formEl));
         }, false);
 
-        // nav-4 新建地址簿按钮
         contentEl.addEventListener('click', function (e) {
             const {open: openModal} = getModal();
             const btn = e.target.closest('.nav4-create-btn');
@@ -560,7 +615,6 @@
             openModal('nav4-create-root');
         }, false);
 
-        // nav-4 新建地址簿表单
         contentEl.addEventListener('submit', function (e) {
             const {showToast, postForm} = getUtils();
             const {close: closeModal} = getModal();
@@ -585,7 +639,6 @@
             });
         }, false);
 
-        // nav-4 行级操作
         contentEl.addEventListener('click', function (e) {
             const {showToast, postForm} = getUtils();
             const {open: openModal} = getModal();
@@ -623,7 +676,6 @@
             }
         }, false);
 
-        // nav-4 重命名表单
         contentEl.addEventListener('submit', function (e) {
             const {showToast, postForm} = getUtils();
             const {close: closeModal} = getModal();
@@ -648,7 +700,6 @@
             });
         }, false);
 
-        // nav-4 从地址簿移除设备
         contentEl.addEventListener('click', function (e) {
             const {showToast, postForm} = getUtils();
             const {URLS} = getConstants();
@@ -668,7 +719,6 @@
             });
         }, false);
 
-        // nav-4 编辑地址簿设备信息
         contentEl.addEventListener('click', function (e) {
             const btn = e.target.closest('.nav4-edit-btn');
             if (!btn) return;
@@ -683,7 +733,6 @@
             startInlineEdit4(cell, field, guid, peerId);
         }, false);
 
-        // 添加设备到地址簿表单
         const addToBookForm = document.getElementById('nav2-add-to-book-form');
         if (addToBookForm) {
             addToBookForm.addEventListener('submit', function (e) {

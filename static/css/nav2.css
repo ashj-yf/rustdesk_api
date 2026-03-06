@@ -144,6 +144,14 @@
     color: var(--color-link-hover);
 }
 
+.nav2-link--danger {
+    color: var(--color-danger);
+}
+
+.nav2-link--danger:hover {
+    color: var(--color-danger);
+}
+
 .nav2-status {
     display: inline-block;
     padding: 2px 8px;
@@ -484,6 +492,81 @@
     .nav2-layout {
         flex-direction: column;
     }
+}
+
+.nav2-inline-form {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+/* 角色编辑弹窗表单 */
+.nav3-role-form-group {
+    margin-bottom: 14px;
+}
+
+.nav3-role-form-group > label {
+    display: block;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--color-text-secondary);
+    margin-bottom: 6px;
+}
+
+.nav3-role-form-group .nav2-input-full {
+    width: 100%;
+}
+
+.nav3-perm-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px 16px;
+}
+
+.nav3-perm-cb-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 13px;
+    color: var(--color-text);
+    cursor: pointer;
+    padding: 4px 0;
+}
+
+/* 角色分配弹窗条目 */
+.nav3-assign-role-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    padding: 8px 0;
+    border-bottom: 1px solid var(--color-border);
+    cursor: pointer;
+}
+
+.nav3-assign-role-item:last-child {
+    border-bottom: none;
+}
+
+.nav3-assign-role-item input[type="checkbox"] {
+    margin-top: 2px;
+    flex-shrink: 0;
+}
+
+.nav3-assign-role-info {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.nav3-assign-role-name {
+    font-size: 14px;
+    color: var(--color-text);
+}
+
+.nav3-role-perm-label {
+    font-size: 12px;
+    color: var(--color-text-hint);
 }
 
 @media (max-width: 480px) {

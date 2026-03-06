@@ -4,6 +4,35 @@ from django.db import models
 from common.utils import get_uuid
 
 
+class DevicePermission:
+    """
+    设备操作权限位定义（bitflag）
+
+    每个权限占一位，可通过按位 OR 灵活组合。
+    """
+
+    NONE = 0
+    VIEW = 1 << 0  # 1  - 查看设备信息
+    EDIT = 1 << 1  # 2  - 编辑设备属性（备注、别名、启用/禁用等）
+    DELETE = 1 << 2  # 4  - 删除设备
+    CONNECT = 1 << 3  # 8  - 远程连接设备
+    FULL = VIEW | EDIT | DELETE | CONNECT  # 15
+
+    LABELS = {
+        VIEW: "查看",
+        EDIT: "编辑",
+        DELETE: "删除",
+        CONNECT: "连接",
+    }
+
+    ALL_FLAGS = (VIEW, EDIT, DELETE, CONNECT)
+
+    PRESET_READONLY = VIEW
+    PRESET_OPERATOR = VIEW | CONNECT
+    PRESET_EDITOR = VIEW | EDIT | CONNECT
+    PRESET_FULL = FULL
+
+
 class TimestampMixin(models.Model):
     """
     提供 created_at / updated_at 的抽象基类
@@ -627,3 +656,110 @@ class UserConfig(models.Model):
         ordering = ["-created_at"]
         db_table = "user_config"
         unique_together = [["user", "config_name"]]
+
+
+# ---------------------------------------------------------------------------
+# 权限系统模型
+# ---------------------------------------------------------------------------
+
+
+class Role(TimestampMixin):
+    """
+    角色模型
+
+    系统内置 default 角色（is_default=True），不可删除、不可重命名。
+    管理员可创建自定义角色并为其配置全局原子权限。
+    permission 字段为 DevicePermission bitflag 并集，创建时即指定。
+    """
+
+    name = models.CharField(max_length=100, unique=True, verbose_name="角色名称")
+    note = models.TextField(default="", blank=True, verbose_name="备注")
+    is_default = models.BooleanField(default=False, verbose_name="是否默认角色")
+    permission = models.IntegerField(default=0, verbose_name="全局权限位")
+
+    class Meta:
+        verbose_name = "角色"
+        verbose_name_plural = "角色"
+        ordering = ["name"]
+        db_table = "role"
+
+    def __str__(self):
+        return self.name
+
+
+class UserRole(models.Model):
+    """
+    用户与角色多对多中间表
+
+    一个用户可拥有多个角色，同层级多角色权限取并集（按位 OR）。
+    """
+
+    user = models.ForeignKey(
+        User, on_delete=models.CASCADE, related_name="user_roles", verbose_name="用户"
+    )
+    role = models.ForeignKey(
+        Role, on_delete=models.CASCADE, related_name="role_users", verbose_name="角色"
+    )
+
+    class Meta:
+        verbose_name = "用户角色关联"
+        verbose_name_plural = "用户角色关联"
+        db_table = "user_role"
+        unique_together = [["user", "role"]]
+
+    def __str__(self):
+        return f"{self.user} - {self.role}"
+
+
+class GroupRole(models.Model):
+    """
+    用户组与角色多对多中间表
+
+    用户组绑定角色后，组内所有用户继承该角色的全局权限。
+    """
+
+    group = models.ForeignKey(
+        Group, on_delete=models.CASCADE, related_name="group_roles", verbose_name="用户组"
+    )
+    role = models.ForeignKey(
+        Role, on_delete=models.CASCADE, related_name="role_groups", verbose_name="角色"
+    )
+
+    class Meta:
+        verbose_name = "用户组角色关联"
+        verbose_name_plural = "用户组角色关联"
+        db_table = "group_role"
+        unique_together = [["group", "role"]]
+
+    def __str__(self):
+        return f"{self.group} - {self.role}"
+
+
+class DeviceGroupPeer(models.Model):
+    """
+    设备与设备组多对多中间表
+
+    数据库层面为多对多，Service 层当前限制一个设备只能属于一个组。
+    """
+
+    device_group = models.ForeignKey(
+        DeviceGroup,
+        on_delete=models.CASCADE,
+        related_name="group_peers",
+        verbose_name="设备组",
+    )
+    peer = models.ForeignKey(
+        PeerInfo,
+        on_delete=models.CASCADE,
+        related_name="peer_groups",
+        verbose_name="设备",
+    )
+
+    class Meta:
+        verbose_name = "设备组设备关联"
+        verbose_name_plural = "设备组设备关联"
+        db_table = "device_group_peer"
+        unique_together = [["device_group", "peer"]]
+
+    def __str__(self):
+        return f"{self.device_group} - {self.peer}"

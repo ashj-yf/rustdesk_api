@@ -9,9 +9,11 @@ from django.shortcuts import render
 from django.views.decorators.http import require_http_methods
 
 from apps.client_apis.common import request_debug_log
+from apps.db.models import DevicePermission, UserRole
 from apps.db.service import (
     UserService, PeerInfoService, PersonalService,
     AliasService, HeartBeatService, ClientTagsService,
+    PermissionService,
 )
 from apps.web.view_personal import is_default_personal
 
@@ -31,7 +33,19 @@ def home(request):
     :rtype: HttpResponse
     """
     username = getattr(request.user, 'username', '') or request.user.get_username()
-    return render(request, 'home.html', context={'username': username})
+    perm_flags = [
+        {'key': k, 'value': v, 'label': DevicePermission.LABELS[v]}
+        for k, v in [
+            ('VIEW', DevicePermission.VIEW),
+            ('EDIT', DevicePermission.EDIT),
+            ('DELETE', DevicePermission.DELETE),
+            ('CONNECT', DevicePermission.CONNECT),
+        ]
+    ]
+    return render(request, 'home.html', context={
+        'username': username,
+        'perm_flags': perm_flags,
+    })
 
 
 @request_debug_log
@@ -145,7 +159,15 @@ def nav_content(request: HttpRequest) -> HttpResponse:
         user_qs = UserService().get_active_users_qs(q=q)
         paginator = Paginator(user_qs, page_size)
         page_obj = paginator.get_page(page)
-        users = page_obj.object_list
+        users = list(page_obj.object_list)
+
+        user_ids = [u.id for u in users]
+        role_map = {}
+        for ur in UserRole.objects.filter(user_id__in=user_ids).select_related('role'):
+            role_map.setdefault(ur.user_id, []).append(ur.role.name)
+        for u in users:
+            u.role_names = ', '.join(role_map.get(u.id, []))
+
         context.update({
             'users': users,
             'paginator': paginator,
@@ -219,6 +241,9 @@ def rename_alias(request: HttpRequest) -> JsonResponse:
     if not peer:
         return JsonResponse({'ok': False, 'err_msg': '设备不存在'}, status=404)
 
+    if not PermissionService().has_perm(request.user, DevicePermission.EDIT):
+        return JsonResponse({'ok': False, 'err_msg': '无权编辑该设备'}, status=403)
+
     personal = PersonalService().get_or_create_default_personal(request.user)
     AliasService().update_or_create_alias(peer, personal, alias_text)
     return JsonResponse({'ok': True})
@@ -243,6 +268,9 @@ def device_detail(request: HttpRequest) -> JsonResponse:
     peer = PeerInfoService().get_peer_info_by_peer_id(peer_id)
     if not peer:
         return JsonResponse({'ok': False, 'err_msg': '设备不存在'}, status=404)
+
+    if not PermissionService().has_perm(request.user, DevicePermission.VIEW):
+        return JsonResponse({'ok': False, 'err_msg': '无权查看该设备'}, status=403)
 
     alias_text = AliasService().get_peer_alias_text(peer, request.user)
     tag_list = ClientTagsService().get_user_peer_tags(request.user, peer_id)
@@ -286,6 +314,9 @@ def update_device(request: HttpRequest) -> JsonResponse:
     peer = PeerInfoService().get_peer_info_by_peer_id(peer_id)
     if not peer:
         return JsonResponse({'ok': False, 'err_msg': '设备不存在'}, status=404)
+
+    if not PermissionService().has_perm(request.user, DevicePermission.EDIT):
+        return JsonResponse({'ok': False, 'err_msg': '无权编辑该设备'}, status=403)
 
     alias_text = request.POST.get('alias')
     tags_str = request.POST.get('tags')
@@ -376,8 +407,14 @@ def delete_device(request: HttpRequest) -> JsonResponse:
     if not peer_ids:
         return JsonResponse({'ok': False, 'err_msg': '参数错误'}, status=400)
 
+    perm_service = PermissionService()
+    if not perm_service.has_perm(request.user, DevicePermission.DELETE):
+        return JsonResponse({'ok': False, 'err_msg': '无权删除设备'}, status=403)
+
+    peer_service = PeerInfoService()
+
     try:
-        count = PeerInfoService().delete_peers(peer_ids)
+        count = peer_service.delete_peers(peer_ids)
     except OperationalError as e:
         logger.warning(f"删除设备数据库繁忙: {e}")
         return JsonResponse({'ok': False, 'err_msg': '数据库繁忙，请稍后重试'}, status=503)
@@ -406,8 +443,12 @@ def toggle_device(request: HttpRequest) -> JsonResponse:
     peer_ids = [p.strip() for p in raw.split(',') if p.strip()]
     if not peer_ids:
         return JsonResponse({'ok': False, 'err_msg': '参数错误'}, status=400)
+
+    if not PermissionService().has_perm(request.user, DevicePermission.EDIT):
+        return JsonResponse({'ok': False, 'err_msg': '无权操作设备'}, status=403)
+
     enabled = enabled_str == 'true'
-    count = PeerInfoService().toggle_peers(peer_ids, enabled)
+    count = peer_service.toggle_peers(peer_ids, enabled)
     return JsonResponse({'ok': True, 'count': count})
 
 
@@ -428,8 +469,14 @@ def update_note(request: HttpRequest) -> JsonResponse:
     if not peer_id:
         return JsonResponse({'ok': False, 'err_msg': '参数错误'}, status=400)
 
-    if not PeerInfoService().update_note(peer_id, note):
+    peer = PeerInfoService().get_peer_info_by_peer_id(peer_id)
+    if not peer:
         return JsonResponse({'ok': False, 'err_msg': '设备不存在'}, status=404)
+
+    if not PermissionService().has_perm(request.user, DevicePermission.EDIT):
+        return JsonResponse({'ok': False, 'err_msg': '无权编辑该设备'}, status=403)
+
+    PeerInfoService().update_note(peer_id, note)
     return JsonResponse({'ok': True})
 
 

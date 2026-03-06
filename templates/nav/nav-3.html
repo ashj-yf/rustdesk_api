@@ -10,6 +10,7 @@
         <button type="button" class="nav2-btn nav3-reset-btn">重置</button>
     </form>
     <div class="nav2-toolbar-actions">
+        <button type="button" class="nav2-btn nav3-role-manage-btn">角色管理</button>
         <button type="button" class="nav2-btn nav2-primary nav3-create-btn">新建用户</button>
     </div>
 </div>
@@ -24,6 +25,7 @@
                 <th data-col-key="email" style="width: 180px;">邮箱</th>
                 <th data-col-key="is_active" style="width: 100px;">状态</th>
                 <th data-col-key="is_staff" style="width: 100px;">管理员</th>
+                <th data-col-key="roles" style="width: 140px;">角色</th>
                 <th data-col-key="last_login" style="width: 180px;">最近登录</th>
                 <th data-col-key="date_joined" style="width: 180px;">创建时间</th>
                 <th data-col-key="actions" style="width: 240px;">操作</th>
@@ -49,6 +51,7 @@
                             <span class="nav2-status offline">否</span>
                         {% endif %}
                     </td>
+                    <td>{{ u.role_names|default:'-' }}</td>
                     <td>{{ u.last_login|date:"Y-m-d H:i:s"|default:'-' }}</td>
                     <td>{{ u.date_joined|date:"Y-m-d H:i:s" }}</td>
                     <td>
@@ -60,6 +63,11 @@
                                     data-fullname="{{ u.get_full_name|default:'' }}"
                                     data-email="{{ u.email|default:'' }}"
                                     data-is_staff="{% if u.is_staff %}1{% else %}0{% endif %}">编辑
+                            </button>
+                            <button type="button"
+                                    class="nav2-btn nav3-row-action"
+                                    data-action="roles"
+                                    data-username="{{ u.username }}">角色
                             </button>
                             <button type="button"
                                     class="nav2-btn nav3-row-action"
@@ -98,4 +106,8 @@
 {% include "nav/modals/nav3-edit.html" %}
 {% include "nav/modals/nav3-reset.html" %}
 {% include "nav/modals/nav3-create.html" %}
+{% include "nav/modals/nav3-roles.html" %}
+{% include "nav/modals/nav3-role-edit.html" %}
+{% include "nav/modals/nav3-assign-role.html" %}
+{% include "nav/modals/nav3-assign-group-role.html" %}
 

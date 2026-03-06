@@ -8,9 +8,11 @@ from django.utils import timezone
 from django.views.decorators.http import require_http_methods
 
 from apps.client_apis.common import check_login, request_debug_log
-from apps.db.models import PeerInfo
-from apps.db.service import HeartBeatService, PeerInfoService, TokenService, UserService, \
-    LoginClientService, DeviceGroupService
+from apps.db.models import DevicePermission
+from apps.db.service import (
+    HeartBeatService, PeerInfoService, TokenService, UserService,
+    LoginClientService, DeviceGroupService, PermissionService,
+    DeviceGroupPeerService, )
 from common.utils import get_local_time, str2bool
 
 logger = logging.getLogger(__name__)
@@ -251,20 +253,27 @@ def users(request: HttpRequest):
 @check_login
 def peers(request: HttpRequest):
     """
-    展示当前用户可以看到的设备信息
-    当前如果是管理员，则可以看到全部（包括未登录的设备）
-    如果是用户，则默认只能看到自己登录的设备
-    :param request:
-    :return:
-    """
-    # TODO 这里有一个问题，这里需要按照用户展示设备信息，当前只展示登录用户的信息
+    展示当前用户有查看权限的设备信息
 
+    :param request: HTTP 请求对象
+    :return: JSON 响应，形如 {"total": N, "data": [...]}
+    :rtype: JsonResponse
+    """
     token_service = TokenService(request=request)
     user_info = token_service.user_info
 
-    client_list = PeerInfo.objects.select_related('device_group').all()
-    data = [
-        {
+    perm_service = PermissionService()
+    if not perm_service.has_perm(user_info, DevicePermission.VIEW):
+        return JsonResponse({'total': 0, 'data': []})
+
+    dgp_service = DeviceGroupPeerService()
+    client_list = list(PeerInfoService().get_list())
+
+    data = []
+    for client in client_list:
+        groups = dgp_service.get_groups_for_peer(client)
+        group_name = groups[0].name if groups else ""
+        data.append({
             "id": client.peer_id,
             "info": {
                 "device_name": client.device_name,
@@ -273,11 +282,10 @@ def peers(request: HttpRequest):
             },
             "status": 1,
             "user_name": user_info.username,
-            "device_group_name": client.device_group.name if client.device_group else "",
+            "device_group_name": group_name,
             "note": client.note or "",
-        }
-        for client in client_list
-    ]
+        })
+
     return JsonResponse({
         'total': len(data),
         'data': data

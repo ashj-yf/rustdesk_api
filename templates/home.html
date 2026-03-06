@@ -84,6 +84,7 @@
 <script src="{% static 'js/nav2.js' %}"></script>
 <script src="{% static 'js/nav3.js' %}"></script>
 <script src="{% static 'js/nav4.js' %}"></script>
+<script src="{% static 'js/nav5-perm.js' %}"></script>
 <script src="{% static 'js/events.js' %}"></script>
 
 <!-- Django 模板变量注入（< 50 行） -->
@@ -96,6 +97,13 @@
      */
     (function () {
         'use strict';
+
+        // 注入权限位定义（由后端 DevicePermission 模型生成）
+        window.APP.PERM_FLAGS = [
+                {% for f in perm_flags %}{ key: "{{ f.key }}", value: {{ f.value }}, label: "{{ f.label }}"
+                    }{% if not forloop.last %},{% endif %}
+                {% endfor %}
+        ];
 
         // 注入 URL 常量
         window.APP.URLS = {
@@ -121,6 +129,16 @@
             PERSONAL_REMOVE_DEVICE: "{% url 'web_personal_remove_device' %}",
             PERSONAL_UPDATE_ALIAS: "{% url 'web_personal_update_alias' %}",
             PERSONAL_UPDATE_TAGS: "{% url 'web_personal_update_tags' %}",
+            ROLE_LIST: "{% url 'web_role_list' %}",
+            ROLE_CREATE: "{% url 'web_role_create' %}",
+            ROLE_UPDATE: "{% url 'web_role_update' %}",
+            ROLE_DELETE: "{% url 'web_role_delete' %}",
+            USER_ROLES: "{% url 'web_user_roles' %}",
+            ROLE_ASSIGN: "{% url 'web_role_assign' %}",
+            ROLE_REMOVE: "{% url 'web_role_remove' %}",
+            GROUP_ROLES: "{% url 'web_group_roles' %}",
+            GROUP_ROLE_ASSIGN: "{% url 'web_group_role_assign' %}",
+            GROUP_ROLE_REMOVE: "{% url 'web_group_role_remove' %}",
             LOGIN: "{% url 'web_login' %}",
             HOME: "{% url 'web_home' %}"
         };
