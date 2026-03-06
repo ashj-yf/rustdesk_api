@@ -1,10 +1,10 @@
-<!-- 样式由宿主页 head 的静态 CSS 提供 -->
 {% load static %}
 
 <div class="nav2-section-title">设备管理</div>
+
 <div class="nav2-toolbar" aria-label="设备工具栏">
     <form id="nav2-search-form" role="search" aria-label="设备搜索筛选">
-        <input class="nav2-input" type="text" name="q" value="{{ q|default:'' }}" placeholder="搜索设备ID/名称"
+        <input class="nav2-input" type="text" name="q" value="{{ q|default:'' }}" placeholder="搜索ID/名称/别名"
                aria-label="搜索关键词">
         <select class="nav2-select" name="os" aria-label="系统">
             <option value="" {% if not os %}selected{% endif %}>所有系统</option>
@@ -19,46 +19,83 @@
             <option value="online" {% if status == 'online' %}selected{% endif %}>在线</option>
             <option value="offline" {% if status == 'offline' %}selected{% endif %}>离线</option>
         </select>
+        <select class="nav2-select" name="enabled" aria-label="启用状态">
+            <option value="" {% if not enabled %}selected{% endif %}>启用/禁用</option>
+            <option value="enabled" {% if enabled == 'enabled' %}selected{% endif %}>已启用</option>
+            <option value="disabled" {% if enabled == 'disabled' %}selected{% endif %}>已禁用</option>
+        </select>
+        <select class="nav2-select nav2-sort-select" name="sort" aria-label="排序">
+            <option value="" {% if not sort %}selected{% endif %}>默认排序</option>
+            <option value="peer_id" {% if sort == 'peer_id' %}selected{% endif %}>按设备ID</option>
+            <option value="device_name" {% if sort == 'device_name' %}selected{% endif %}>按主机名</option>
+            <option value="username" {% if sort == 'username' %}selected{% endif %}>按用户名</option>
+            <option value="status" {% if sort == 'status' %}selected{% endif %}>按在线状态</option>
+        </select>
+        <input type="hidden" name="tag" value="{{ tag_filter|default:'' }}">
         <button type="submit" class="nav2-btn nav2-primary">搜索</button>
         <button type="button" class="nav2-btn nav2-reset-btn">重置</button>
     </form>
-    {#    <div class="nav2-toolbar-actions" aria-label="批量操作">#}
-    {#        <button type="button" class="nav2-btn nav2-bulk-btn" data-action="enable">批量启用</button>#}
-    {#        <button type="button" class="nav2-btn nav2-bulk-btn" data-action="disable">批量禁用</button>#}
-    {#        <button type="button" class="nav2-btn nav2-bulk-btn nav2-danger" data-action="delete">批量删除</button>#}
-    {#        <button type="button" class="nav2-btn nav2-bulk-btn" data-action="export">导出列表</button>#}
-    {#    </div>#}
-    <!-- 可按需添加：新建设备/导入等入口 -->
-    <!-- <button type="button" class="nav2-btn">新建设备</button> -->
-    <!-- <button type="button" class="nav2-btn">导入</button> -->
 </div>
 
-{% if devices %}
-    <div class="x-scroll-container">
-        <table class="nav2-table" aria-label="设备列表" data-table-id="nav2-devices">
-        <thead>
-        <tr>
-            <th data-col-key="select" style="width: 30px;">
-                <input type="checkbox" id="nav2-select-all" aria-label="全选设备">
-            </th>
-            <th data-col-key="peer_id" style="width: 120px;">设备ID</th>
-            <th data-col-key="device_name" style="width: 170px;">设备名</th>
-            <th data-col-key="os" style="width: 120px;">系统</th>
-            <th data-col-key="status" style="width: 100px;">状态</th>
-            <th data-col-key="version" style="width: 120px;">版本</th>
-            <th data-col-key="created_at" style="width: 180px;">创建时间</th>
-            <th data-col-key="actions" style="width: 150px;">操作</th>
-        </tr>
-        </thead>
-        <tbody>
-        {% for d in devices %}
-            <tr data-peer-id="{{ d.peer_id }}">
-                <td>
-                    <input type="checkbox" class="nav2-row-checkbox" value="{{ d.peer_id }}"
-                           aria-label="选择设备 {{ d.peer_id }}">
-                </td>
+<!-- 批量操作工具栏（默认隐藏） -->
+<div id="nav2-multi-bar" class="nav2-multi-bar" style="display:none;">
+    <span>已选择 <span id="nav2-multi-count" class="nav2-multi-bar-count">0</span> 台设备</span>
+    <button type="button" class="nav2-btn" data-batch="enable">批量启用</button>
+    <button type="button" class="nav2-btn" data-batch="disable">批量禁用</button>
+    <button type="button" class="nav2-btn" data-batch="add_to_book">批量添加到地址簿</button>
+    <button type="button" class="nav2-btn nav2-danger" data-batch="delete">批量删除</button>
+    <button type="button" class="nav2-multi-bar-close" id="nav2-multi-close" aria-label="取消选择">&times;</button>
+</div>
+
+<div class="nav2-layout">
+    {% if all_tags %}
+        <div class="nav2-tag-panel" aria-label="标签过滤">
+            <div class="nav2-tag-panel-title">标签过滤</div>
+            <ul class="nav2-tag-list">
+                <li class="nav2-tag-item {% if not tag_filter %}nav2-tag-item--active{% endif %}"
+                    data-tag-value="">
+                    <span class="nav2-tag-dot"></span>全部
+                </li>
+                {% for t in all_tags %}
+                    <li class="nav2-tag-item {% if tag_filter == t %}nav2-tag-item--active{% endif %}"
+                        data-tag-value="{{ t }}">
+                        <span class="nav2-tag-dot"></span>{{ t }}
+                    </li>
+                {% endfor %}
+            </ul>
+        </div>
+    {% endif %}
+
+    <div class="nav2-main">
+        {% if devices %}
+            <div class="x-scroll-container">
+                <table class="nav2-table" aria-label="设备列表" data-table-id="nav2-devices">
+                    <thead>
+                    <tr>
+                        <th data-col-key="select" style="width:30px;">
+                            <input type="checkbox" id="nav2-select-all" aria-label="全选设备">
+                        </th>
+                        <th data-col-key="peer_id" style="width:110px;">设备ID</th>
+                        <th data-col-key="device_name" style="width:130px;">主机名</th>
+                        <th data-col-key="alias" style="width:110px;">别名</th>
+                        <th data-col-key="os" style="width:100px;">系统</th>
+                        <th data-col-key="status" style="width:70px;">状态</th>
+                        <th data-col-key="enabled" style="width:70px;">启用</th>
+                        <th data-col-key="version" style="width:90px;">版本</th>
+                        <th data-col-key="note" style="width:130px;">备注</th>
+                        <th data-col-key="created_at" style="width:150px;">创建时间</th>
+                        <th data-col-key="actions" style="width:80px;">操作</th>
+                    </tr>
+                    </thead>
+                    <tbody>
+                    {% for d in devices %}
+                        <tr data-peer-id="{{ d.peer_id }}" data-enabled="{{ d.is_enabled|yesno:'true,false' }}"
+                            class="{% if not d.is_enabled %}nav2-row--disabled{% endif %}">
+                            <td><input type="checkbox" class="nav2-row-checkbox" value="{{ d.peer_id }}"
+                                       aria-label="选择设备 {{ d.peer_id }}"></td>
                 <td>{{ d.peer_id }}</td>
                 <td>{{ d.device_name }}</td>
+                            <td class="nav2-alias-cell">{{ d.alias|default:'-' }}</td>
                 <td>{{ d.os }}</td>
                 <td>
                     {% if d.is_online %}
@@ -67,53 +104,58 @@
                         <span class="nav2-status offline" data-status-for="{{ d.peer_id }}">离线</span>
                     {% endif %}
                 </td>
+                            <td>
+                                {% if d.is_enabled %}
+                                    <span class="nav2-enabled-badge nav2-enabled-badge--on">启用</span>
+                                {% else %}
+                                    <span class="nav2-enabled-badge nav2-enabled-badge--off">禁用</span>
+                                {% endif %}
+                            </td>
                 <td>{{ d.version }}</td>
-                <td>{{ d.created_at|date:"Y-m-d H:i:s" }}</td>
+                            <td class="nav2-note-cell" title="{{ d.note|default:'' }}">{{ d.note|default:'-' }}</td>
+                            <td>{{ d.created_at|date:"Y-m-d H:i" }}</td>
                 <td>
-                    <div class="nav2-row-actions">
-                        <button type="button" class="nav2-link nav2-row-action" data-action="add_to_book"
-                                data-id="{{ d.peer_id }}">添加到地址簿
-                        </button>
-                    </div>
+                    <button type="button" class="nav2-link nav2-row-action" data-action="more"
+                            data-id="{{ d.peer_id }}" aria-label="更多操作">⋯
+                    </button>
                 </td>
             </tr>
-        {% endfor %}
-        </tbody>
-        </table>
+                    {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            <div class="nav2-pagination">
+                <button class="nav2-btn nav2-page-btn" data-key="nav-2"
+                        {% if page_obj.has_previous %}data-page="{{ page_obj.previous_page_number }}"
+                        {% else %}data-page=""
+                        disabled{% endif %}>上一页
+                </button>
+                <span class="nav2-pagination-info">第 {{ page_obj.number }} / {{ paginator.num_pages }} 页（共 {{ paginator.count }} 条）</span>
+                <button class="nav2-btn nav2-page-btn" data-key="nav-2"
+                        {% if page_obj.has_next %}data-page="{{ page_obj.next_page_number }}"{% else %}data-page=""
+                        disabled{% endif %}>下一页
+                </button>
+            </div>
+        {% else %}
+            <div class="nav2-empty">暂无设备数据</div>
+        {% endif %}
     </div>
-    <div class="nav2-pagination">
-        <button class="nav2-btn nav2-page-btn" data-key="nav-2"
-                {% if page_obj.has_previous %}data-page="{{ page_obj.previous_page_number }}"{% else %}data-page=""
-                disabled{% endif %}>上一页
-        </button>
-        <span class="nav2-pagination-info">第 {{ page_obj.number }} / {{ paginator.num_pages }} 页（共 {{ paginator.count }} 条）</span>
-        <button class="nav2-btn nav2-page-btn" data-key="nav-2"
-                {% if page_obj.has_next %}data-page="{{ page_obj.next_page_number }}"{% else %}data-page=""
-                disabled{% endif %}>下一页
-        </button>
-        <!-- 预留每页大小控制（后端支持后启用）
-    <select class="nav2-select" name="page_size" aria-label="每页条数">
-        <option value="10" {% if page_size == 10 %}selected{% endif %}>10</option>
-        <option value="20" {% if page_size == 20 %}selected{% endif %}>20</option>
-        <option value="50" {% if page_size == 50 %}selected{% endif %}>50</option>
-    </select>
-    -->
-    </div>
-{% else %}
-    <div class="nav2-empty">暂无设备数据</div>
-{% endif %}
+</div>
 
-<!-- 详情弹框（内容留空，供后续填充） -->
-<div id="nav2-modal-root" class="modal-backdrop" aria-hidden="true">
-    <div class="modal modal--md" role="dialog" aria-modal="true" aria-labelledby="nav2-modal-title">
-        <div class="modal-header">
-            <h3 id="nav2-modal-title" class="modal-title">设备详情</h3>
-            <button type="button" class="modal-close" data-close="nav2-modal" aria-label="关闭">
-                <img src="{% static 'icons/close.svg' %}" width="16" height="16" alt="" aria-hidden="true">
-            </button>
-        </div>
-        <div class="modal-body" id="nav2-modal-body"></div>
-    </div>
+{% include "nav/modals/nav2-detail.html" %}
+{% include "nav/modals/nav2-delete-confirm.html" %}
+
+<!-- 右键上下文菜单 -->
+<div id="nav2-context-menu" class="nav2-context-menu" role="menu">
+    <button class="nav2-context-item" data-ctx="detail" role="menuitem">查看详情</button>
+    <button class="nav2-context-item" data-ctx="rename" role="menuitem">重命名</button>
+    <button class="nav2-context-item" data-ctx="edit_tags" role="menuitem">编辑标签</button>
+    <button class="nav2-context-item" data-ctx="edit_note" role="menuitem">编辑备注</button>
+    <div class="nav2-context-divider"></div>
+    <button class="nav2-context-item" data-ctx="toggle" role="menuitem" id="nav2-ctx-toggle">启用/禁用</button>
+    <button class="nav2-context-item" data-ctx="add_to_book" role="menuitem">添加到地址簿</button>
+    <div class="nav2-context-divider"></div>
+    <button class="nav2-context-item nav2-context-item--danger" data-ctx="delete" role="menuitem">删除</button>
 </div>
 
 <!-- 重命名弹框 -->
@@ -135,6 +177,32 @@
                 </div>
                 <div class="nav2-form-actions">
                     <button type="button" class="nav2-btn" data-close="nav2-rename">取消</button>
+                    <button type="submit" class="nav2-btn nav2-primary">保存</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- 编辑备注弹框 -->
+<div id="nav2-note-root" class="modal-backdrop" aria-hidden="true">
+    <div class="modal modal--sm" role="dialog" aria-modal="true" aria-labelledby="nav2-note-title">
+        <div class="modal-header">
+            <h3 id="nav2-note-title" class="modal-title">编辑备注</h3>
+            <button type="button" class="modal-close" data-close="nav2-note" aria-label="关闭">
+                <img src="{% static 'icons/close.svg' %}" width="16" height="16" alt="" aria-hidden="true">
+            </button>
+        </div>
+        <div class="modal-body">
+            <form id="nav2-note-form">
+                <input type="hidden" name="peer_id" id="nav2-note-peer">
+                <div class="nav2-form-row">
+                    <label for="nav2-note-text">备注</label>
+                    <input class="nav2-input nav2-input-full" type="text" name="note" id="nav2-note-text"
+                           placeholder="请输入备注信息">
+                </div>
+                <div class="nav2-form-actions">
+                    <button type="button" class="nav2-btn" data-close="nav2-note">取消</button>
                     <button type="submit" class="nav2-btn nav2-primary">保存</button>
                 </div>
             </form>

@@ -24,9 +24,11 @@ from apps.db.models import (
     Personal,
     Alias,
     ClientTags,
+    PeerPersonal,
     ShareToUser,
     ShareToGroup,
     UserConfig,
+    DeviceGroup,
 )
 from common.error import UserNotFoundError
 from common.utils import get_local_time, get_randem_md5
@@ -349,7 +351,21 @@ class PeerInfoService(BaseService):
     def get_all_ordered_qs(self, ordering=('-created_at',)):
         return self.db.objects.order_by(*ordering)
 
-    def get_device_list_qs(self, user, q='', os_param='', status=''):
+    def get_device_list_qs(self, user, q='', os_param='', status='',
+                           enabled='', sort='', tags=None):
+        """
+        获取设备列表查询集（带标注和筛选）
+
+        :param user: 当前用户
+        :param q: 搜索关键词（匹配设备ID/设备名/别名）
+        :param os_param: 操作系统筛选
+        :param status: 在线状态筛选（online/offline）
+        :param enabled: 启用状态筛选（enabled/disabled）
+        :param sort: 排序字段（peer_id/device_name/username/status/-created_at）
+        :param tags: 标签筛选列表
+        :return: 标注后的查询集
+        :rtype: QuerySet
+        """
         online_threshold = timezone.now() - timedelta(minutes=5)
         recent_hb = HeartBeat.objects.filter(
             Q(peer_id=OuterRef('peer_id')) | Q(uuid=OuterRef('uuid')),
@@ -364,22 +380,113 @@ class PeerInfoService(BaseService):
                     peer_id=OuterRef('peer_id')
                 ).values('alias')[:1]
             ),
-            tags=Subquery(
+            tags_text=Subquery(
                 ClientTags.objects.filter(
                     peer_id=OuterRef('peer_id'),
                     user=user
                 ).values('tags')[:1]
             )
-        ).order_by('-created_at')
+        )
+
+        sort_map = {
+            'peer_id': 'peer_id',
+            'device_name': 'device_name',
+            'username': 'username',
+            'status': '-is_online',
+            '-created_at': '-created_at',
+        }
+        ordering = sort_map.get(sort, '-created_at')
+        base_qs = base_qs.order_by(ordering)
 
         if q:
-            base_qs = base_qs.filter(Q(peer_id__icontains=q) | Q(device_name__icontains=q))
+            base_qs = base_qs.filter(
+                Q(peer_id__icontains=q) | Q(device_name__icontains=q) |
+                Q(alias__icontains=q)
+            )
         if os_param:
             base_qs = base_qs.filter(os__icontains=os_param)
         if status in ('online', 'offline'):
             base_qs = base_qs.filter(is_online=(status == 'online'))
+        if enabled in ('enabled', 'disabled'):
+            base_qs = base_qs.filter(is_enabled=(enabled == 'enabled'))
+        if tags:
+            tag_peers = ClientTags.objects.filter(
+                user=user, tags__contains=tags
+            ).values_list('peer_id', flat=True)
+            base_qs = base_qs.filter(peer_id__in=tag_peers)
 
         return base_qs
+
+    def delete_peers(self, peer_ids: list[str]) -> int:
+        """
+        批量删除设备及其关联数据
+
+        :param peer_ids: 设备ID列表
+        :type peer_ids: list[str]
+        :return: 删除的设备数量
+        :rtype: int
+        """
+        if not peer_ids:
+            return 0
+        with transaction.atomic():
+            HeartBeat.objects.filter(peer_id__in=peer_ids).delete()
+            Alias.objects.filter(peer_id__peer_id__in=peer_ids).delete()
+            ClientTags.objects.filter(peer_id__in=peer_ids).delete()
+            PeerPersonal.objects.filter(peer__peer_id__in=peer_ids).delete()
+            count, _ = self.db.objects.filter(peer_id__in=peer_ids).delete()
+        logger.info(f"批量删除设备: {peer_ids}, 共删除 {count} 台")
+        return count
+
+    def toggle_peers(self, peer_ids: list[str], enabled: bool) -> int:
+        """
+        批量启用/禁用设备
+
+        :param peer_ids: 设备ID列表
+        :param enabled: 是否启用
+        :return: 更新的设备数量
+        :rtype: int
+        """
+        if not peer_ids:
+            return 0
+        count = self.db.objects.filter(peer_id__in=peer_ids).update(is_enabled=enabled)
+        action = '启用' if enabled else '禁用'
+        logger.info(f"批量{action}设备: {peer_ids}, 共{count}台")
+        return count
+
+    def update_note(self, peer_id: str, note: str) -> bool:
+        """
+        更新设备备注
+
+        :param peer_id: 设备ID
+        :param note: 备注内容
+        :return: 是否更新成功
+        :rtype: bool
+        """
+        count = self.db.objects.filter(peer_id=peer_id).update(note=note)
+        return count > 0
+
+    def get_all_tags_for_user(self, user) -> list[str]:
+        """
+        获取当前用户可见的所有标签（去重、扁平化）
+
+        :param user: 当前用户
+        :return: 标签名称列表
+        :rtype: list[str]
+        """
+        tag_rows = ClientTags.objects.filter(user=user).values_list('tags', flat=True)
+        all_tags = set()
+        for raw in tag_rows:
+            if isinstance(raw, str):
+                for t in raw.split(','):
+                    t = t.strip()
+                    if t:
+                        all_tags.add(t)
+            elif isinstance(raw, list):
+                for t in raw:
+                    t = str(t).strip()
+                    if t:
+                        all_tags.add(t)
+        return sorted(all_tags)
 
 
 class HeartBeatService(BaseService):
@@ -1166,6 +1273,48 @@ class SharePersonalService(BaseService):
         return PersonalService.db.objects.filter(guid__in=all_guids).all()
 
 
+class DeviceGroupService(BaseService):
+    """
+    设备组服务
+
+    提供设备组的查询操作。
+    """
+    db = DeviceGroup
+
+    def get_accessible_groups(self, user: User) -> list[DeviceGroup]:
+        """
+        获取用户可访问的设备组
+
+        :param user: 用户对象
+        :return: 设备组列表
+        """
+        if user.is_superuser:
+            return list(self.db.objects.all())
+        return list(
+            self.db.objects.filter(
+                peers__in=PeerInfo.objects.filter(
+                    peer_id__in=LoginClient.objects.filter(
+                        user=user, login_status=True
+                    ).values_list('peer_id', flat=True)
+                )
+            ).distinct()
+        )
+
+    def get_list(self, page: int = 1, page_size: int = 100) -> dict:
+        """
+        分页查询设备组
+
+        :param page: 页码
+        :param page_size: 每页条数
+        :return: 包含 total 和 data 的字典
+        """
+        qs = self.db.objects.all()
+        total = qs.count()
+        start = (page - 1) * page_size
+        data = list(qs[start:start + page_size])
+        return {'total': total, 'data': data}
+
+
 class UserConfigService(BaseService):
     """
     用户配置服务类
@@ -1189,3 +1338,24 @@ class UserConfigService(BaseService):
         if qs := UserConfig.objects.filter(user=self.user, config_name='language').first():
             return qs.config_value
         return None
+
+    def get_legacy_ab(self) -> str | None:
+        """
+        获取 Legacy 地址簿数据
+
+        :return: JSON 字符串或 None
+        """
+        qs = UserConfig.objects.filter(user=self.user, config_name='legacy_ab').first()
+        return qs.config_value if qs else None
+
+    def set_legacy_ab(self, data: str) -> None:
+        """
+        存储 Legacy 地址簿数据
+
+        :param data: 地址簿 JSON 字符串
+        """
+        UserConfig.objects.update_or_create(
+            user=self.user,
+            config_name='legacy_ab',
+            defaults={"config_value": data}
+        )

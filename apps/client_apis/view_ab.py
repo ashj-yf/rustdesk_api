@@ -1,11 +1,14 @@
+import json
 import logging
+import traceback
 
 from django.http import HttpRequest, JsonResponse, HttpResponse
 from django.views.decorators.http import require_http_methods
 
-from apps.client_apis.common import request_debug_log, debug_response_None, check_login
+from apps.client_apis.common import request_debug_log, check_login
 from apps.db.models import Personal
-from apps.db.service import TokenService, AliasService, TagService, PersonalService, SharePersonalService
+from apps.db.service import TokenService, AliasService, TagService, PersonalService, SharePersonalService, \
+    UserConfigService
 
 logger = logging.getLogger(__name__)
 
@@ -13,10 +16,38 @@ logger = logging.getLogger(__name__)
 @request_debug_log
 @require_http_methods(["GET", "POST"])
 @check_login
-@debug_response_None
 def ab(request: HttpRequest):
-    # 好像在token失效后的残留页面会请求这个接口
-    return None
+    """
+    Legacy 地址簿接口
+
+    GET: 拉取整个地址簿数据
+    POST: 推送整个地址簿数据
+    """
+    token_service = TokenService(request=request)
+    user_info = token_service.user_info
+    config_service = UserConfigService(user_info)
+
+    if request.method == "GET":
+        data = config_service.get_legacy_ab()
+        if data is None:
+            return HttpResponse('null', content_type='application/json')
+        return JsonResponse({
+            'licensed_devices': 0,
+            'data': data,
+        })
+
+    try:
+        body = json.loads(request.body.decode('utf-8'))
+        ab_data = body.get('data', '')
+        config_service.set_legacy_ab(ab_data)
+        return HttpResponse(status=200)
+    except json.JSONDecodeError as e:
+        logger.error(f"Legacy地址簿JSON解析失败: {e}")
+        return HttpResponse(status=400)
+    except Exception as e:
+        logger.error(f"Legacy地址簿保存失败: {e}")
+        logger.error(traceback.format_exc())
+        return HttpResponse(status=500)
 
 
 @request_debug_log
@@ -185,7 +216,17 @@ def ab_peers(request):
         'linux': 'Linux',
         'macos': 'Mac OS',
         'android': 'Android',
+        'ios': 'iOS',
     }
+
+    def _resolve_platform(os_str: str) -> str:
+        key = (os_str or '').split(' / ')[0].strip().lower()
+        platform = os_map.get(key)
+        if platform:
+            return platform
+        if 'linux' in key:
+            return 'Linux'
+        return key or ''
 
     result = {
         "total": peers_qs.count(),
@@ -195,7 +236,7 @@ def ab_peers(request):
                 "username": p.peer.username,
                 "hostname": p.peer.device_name,
                 "alias": alias_map.get(p.peer.peer_id, ""),
-                "platform": os_map[p.peer.os.split(' / ')[0]],
+                "platform": _resolve_platform(p.peer.os),
                 "tags": tags_map.get(p.peer.peer_id, []),
             } for p in peers_qs
         ]

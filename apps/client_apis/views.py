@@ -7,10 +7,10 @@ from django.http import HttpRequest, JsonResponse, HttpResponse
 from django.utils import timezone
 from django.views.decorators.http import require_http_methods
 
-from apps.client_apis.common import check_login, request_debug_log, debug_response_None
+from apps.client_apis.common import check_login, request_debug_log
 from apps.db.models import PeerInfo
 from apps.db.service import HeartBeatService, PeerInfoService, TokenService, UserService, \
-    LoginClientService
+    LoginClientService, DeviceGroupService
 from common.utils import get_local_time, str2bool
 
 logger = logging.getLogger(__name__)
@@ -74,21 +74,32 @@ def heartbeat(request: HttpRequest):
 @request_debug_log
 @require_http_methods(["POST"])
 def sysinfo(request: HttpRequest):
-    body = json.loads(request.body.decode('utf-8'))
-    uuid = body.get('uuid')
+    try:
+        body = json.loads(request.body.decode('utf-8'))
+        uuid = body.get('uuid')
 
-    PeerInfoService().update(
-        uuid=uuid,
-        peer_id=body.get('id'),
-        cpu=body.get('cpu'),
-        device_name=body.get('hostname'),
-        memory=body.get('memory'),
-        os=body.get('os'),
-        username=body.get('username') or body.get('hostname'),
-        version=body.get('version'),
-    )
+        PeerInfoService().update(
+            uuid=uuid,
+            peer_id=body.get('id'),
+            cpu=body.get('cpu'),
+            device_name=body.get('hostname'),
+            memory=body.get('memory'),
+            os=body.get('os'),
+            username=body.get('username') or body.get('hostname'),
+            version=body.get('version'),
+        )
 
-    return HttpResponse(status=200)
+        return HttpResponse('SYSINFO_UPDATED', status=200)
+    except json.JSONDecodeError as e:
+        logger.error(f"系统信息请求JSON解析失败: {e}")
+        return HttpResponse(status=400)
+    except OperationalError as e:
+        logger.warning(f"系统信息请求数据库繁忙: {e}")
+        return HttpResponse(status=503)
+    except Exception as e:
+        logger.error(f"系统信息请求处理失败: {e}")
+        logger.error(traceback.format_exc())
+        return HttpResponse(status=500)
 
 
 @request_debug_log
@@ -110,16 +121,12 @@ def login(request: HttpRequest):
     client_type = device_info.get('type')
     client_name = device_info.get('name')
 
-    try:
-        user = UserService().get_user_by_name(username=username)
-        assert user and user.check_password(password)
-    except AssertionError:
-        logger.error(traceback.format_exc())
-        return JsonResponse({'error': '用户名或密码错误'})
+    user = UserService().get_user_by_name(username=username)
+    if not user or not user.check_password(password):
+        return JsonResponse({'error': '用户名或密码错误'}, status=401)
 
     token = token_service.create_token(username, uuid)
 
-    # Server端记录登录信息
     LoginClientService().update_login_status(
         uuid=uuid,
         username=user,
@@ -128,20 +135,18 @@ def login(request: HttpRequest):
         platform=platform,
         client_type=client_type,
     )
-    #
-    # LogService().create_log(
-    #     username=username,
-    #     uuid=uuid,
-    #     log_type='login',
-    #     log_message=f'用户 {username} 登录'
-    # )
 
     return JsonResponse(
         {
             'access_token': token,
             'type': 'access_token',
             'user': {
-                'name': username,
+                'name': user.username,
+                'email': user.email or '',
+                'note': '',
+                'status': 1 if user.is_active else 0,
+                'is_admin': user.is_superuser,
+                'info': {},
             }
         }
     )
@@ -192,6 +197,11 @@ def current_user(request: HttpRequest):
     return JsonResponse(
         {
             'name': user_info.username,
+            'email': user_info.email or '',
+            'note': '',
+            'status': 1 if user_info.is_active else 0,
+            'is_admin': user_info.is_superuser,
+            'info': {},
             'access_token': token,
             'type': 'access_token',
         }
@@ -220,10 +230,10 @@ def users(request: HttpRequest):
     user_list = [
         {
             "name": user.username,
-            "email": user.email,
+            "email": user.email or '',
             "note": "",
             "is_admin": user.is_superuser,
-            "status": user.is_active,
+            "status": 1 if user.is_active else 0,
             "info": {}
         } for user in result
     ]
@@ -251,65 +261,57 @@ def peers(request: HttpRequest):
 
     token_service = TokenService(request=request)
     user_info = token_service.user_info
-    # uuid = token_service.get_cur_uuid_by_token(token)
 
-    client_list = PeerInfoService().get_list()
-    data = []
-    for client in client_list:
-        # if client.uuid == uuid:
-        #     continue
-        data.append(
-            {
-                "id": client.peer_id,
-                "info": {
-                    "device_name": client.device_name,
-                    "os": client.os,
-                    "username": client.username,
-                },
-                "status": 1,
-                "user_name": user_info.username,
-            }
-        )
-    result = {
-        'total': len(client_list),
+    client_list = PeerInfo.objects.select_related('device_group').all()
+    data = [
+        {
+            "id": client.peer_id,
+            "info": {
+                "device_name": client.device_name,
+                "os": client.os,
+                "username": client.username,
+            },
+            "status": 1,
+            "user_name": user_info.username,
+            "device_group_name": client.device_group.name if client.device_group else "",
+            "note": client.note or "",
+        }
+        for client in client_list
+    ]
+    return JsonResponse({
+        'total': len(data),
         'data': data
-    }
-    return JsonResponse(result)
+    })
 
 
 @request_debug_log
 @require_http_methods(["GET"])
-@debug_response_None  # 官方对于设备组有权限控制，目前无法控制，直接返回None，接口不报错即可
 @check_login
 def device_group_accessible(request):
     """
-    admin获取当前服务端所有设备信息
-    :param request:
-    :return:
+    获取当前用户可访问的设备组列表
+
+    :param request: HTTP 请求对象
+    :return: JSON 响应，形如 {"total": N, "data": [{"name": "..."}]}
     """
+    try:
+        current = int(request.GET.get('current', 1))
+    except (TypeError, ValueError):
+        current = 1
+    try:
+        page_size = int(request.GET.get('pageSize', 100))
+    except (TypeError, ValueError):
+        page_size = 100
+
     token_service = TokenService(request=request)
     user_info = token_service.user_info
 
-    client_list = PeerInfoService().get_list()
-    data = []
-    for client in client_list:
-        client = client if isinstance(client, PeerInfo) else client.uuid
-        # if client.uuid == uuid:
-        #     continue
-        data.append(
-            {
-                "id": client.peer_id,
-                "info": {
-                    "device_name": client.device_name,
-                    "os": client.os,
-                    "username": client.username,
-                },
-                "status": 1,
-                "user_name": user_info.username,
-            }
-        )
-    result = {
-        'total': len(client_list),
-        'data': data
-    }
-    return JsonResponse(result)
+    groups = DeviceGroupService().get_accessible_groups(user_info)
+    total = len(groups)
+    start = (current - 1) * page_size
+    page_data = groups[start:start + page_size]
+
+    return JsonResponse({
+        'total': total,
+        'data': [{'name': g.name} for g in page_data]
+    })

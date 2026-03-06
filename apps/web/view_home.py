@@ -1,7 +1,9 @@
 import json
+import logging
 
 from django.contrib.auth.decorators import login_required
 from django.core.paginator import Paginator
+from django.db import OperationalError
 from django.http import HttpRequest, HttpResponse, JsonResponse
 from django.shortcuts import render
 from django.views.decorators.http import require_http_methods
@@ -12,6 +14,8 @@ from apps.db.service import (
     AliasService, HeartBeatService, ClientTagsService,
 )
 from apps.web.view_personal import is_default_personal
+
+logger = logging.getLogger(__name__)
 
 
 @request_debug_log
@@ -85,17 +89,6 @@ def nav_content(request: HttpRequest) -> HttpResponse:
             'page_size': page_size,
         })
     elif key == 'nav-2':  # 设备管理
-        """
-        设备管理（nav-2）上下文构建
-
-        :query page: 页码（默认 1）
-        :query page_size: 每页大小（默认 20）
-        :query q: 关键词，匹配设备ID/设备名（可空）
-        :query os: 操作系统筛选（可空；模糊匹配）
-        :query status: 在线状态（online/offline，可空）
-        :returns: 注入模板的设备分页、筛选上下文
-        :rtype: HttpResponse
-        """
         try:
             page = int(request.GET.get('page', 1))
         except (TypeError, ValueError):
@@ -108,17 +101,22 @@ def nav_content(request: HttpRequest) -> HttpResponse:
         q = (request.GET.get('q') or '').strip()
         os_param = (request.GET.get('os') or '').strip()
         status = (request.GET.get('status') or '').strip().lower()
+        enabled = (request.GET.get('enabled') or '').strip().lower()
+        sort = (request.GET.get('sort') or '').strip()
+        tag_filter = (request.GET.get('tag') or '').strip()
 
-        base_qs = PeerInfoService().get_device_list_qs(
-            user=request.user,
-            q=q,
-            os_param=os_param,
-            status=status
+        peer_service = PeerInfoService()
+        tags_param = tag_filter if tag_filter else None
+        base_qs = peer_service.get_device_list_qs(
+            user=request.user, q=q, os_param=os_param,
+            status=status, enabled=enabled, sort=sort,
+            tags=tags_param
         )
 
         paginator = Paginator(base_qs, page_size)
         page_obj = paginator.get_page(page)
         devices = page_obj.object_list
+        all_tags = peer_service.get_all_tags_for_user(request.user)
 
         context.update({
             'devices': devices,
@@ -128,6 +126,10 @@ def nav_content(request: HttpRequest) -> HttpResponse:
             'q': q,
             'os': os_param,
             'status': status,
+            'enabled': enabled,
+            'sort': sort,
+            'tag_filter': tag_filter,
+            'all_tags': all_tags,
         })
     elif key == 'nav-3':  # 用户管理
         try:
@@ -252,6 +254,9 @@ def device_detail(request: HttpRequest) -> JsonResponse:
         'alias': alias_text,
         'platform': peer.os,
         'tags': tag_list,
+        'note': peer.note or '',
+        'is_enabled': peer.is_enabled,
+        'version': peer.version,
     }
     return JsonResponse({'ok': True, 'data': data})
 
@@ -350,3 +355,95 @@ def device_statuses(request: HttpRequest) -> JsonResponse:
     online_set = HeartBeatService().get_online_peer_ids(peer_ids, timeout_seconds=60)
     data = {pid: {'is_online': (pid in online_set)} for pid in peer_ids}
     return JsonResponse({'ok': True, 'data': data})
+
+
+@request_debug_log
+@require_http_methods(['POST'])
+@login_required(login_url='web_login')
+def delete_device(request: HttpRequest) -> JsonResponse:
+    """
+    删除设备（单个或批量）
+
+    :param request: Http 请求对象，POST 参数包含 peer_ids（逗号分隔）
+    :type request: HttpRequest
+    :return: JSON 响应，形如 {"ok": true, "count": N}
+    :rtype: JsonResponse
+    """
+    raw = (request.POST.get('peer_ids') or '').strip()
+    if not raw:
+        return JsonResponse({'ok': False, 'err_msg': '参数错误'}, status=400)
+    peer_ids = [p.strip() for p in raw.split(',') if p.strip()]
+    if not peer_ids:
+        return JsonResponse({'ok': False, 'err_msg': '参数错误'}, status=400)
+
+    try:
+        count = PeerInfoService().delete_peers(peer_ids)
+    except OperationalError as e:
+        logger.warning(f"删除设备数据库繁忙: {e}")
+        return JsonResponse({'ok': False, 'err_msg': '数据库繁忙，请稍后重试'}, status=503)
+
+    return JsonResponse({'ok': True, 'count': count})
+
+
+@request_debug_log
+@require_http_methods(['POST'])
+@login_required(login_url='web_login')
+def toggle_device(request: HttpRequest) -> JsonResponse:
+    """
+    启用/禁用设备（单个或批量）
+
+    :param request: Http 请求对象，POST 参数：
+        - peer_ids: 逗号分隔的设备ID列表
+        - enabled: "true" 或 "false"
+    :type request: HttpRequest
+    :return: JSON 响应，形如 {"ok": true, "count": N}
+    :rtype: JsonResponse
+    """
+    raw = (request.POST.get('peer_ids') or '').strip()
+    enabled_str = (request.POST.get('enabled') or '').strip().lower()
+    if not raw or enabled_str not in ('true', 'false'):
+        return JsonResponse({'ok': False, 'err_msg': '参数错误'}, status=400)
+    peer_ids = [p.strip() for p in raw.split(',') if p.strip()]
+    if not peer_ids:
+        return JsonResponse({'ok': False, 'err_msg': '参数错误'}, status=400)
+    enabled = enabled_str == 'true'
+    count = PeerInfoService().toggle_peers(peer_ids, enabled)
+    return JsonResponse({'ok': True, 'count': count})
+
+
+@request_debug_log
+@require_http_methods(['POST'])
+@login_required(login_url='web_login')
+def update_note(request: HttpRequest) -> JsonResponse:
+    """
+    更新设备备注
+
+    :param request: Http 请求对象，POST 参数包含 peer_id, note
+    :type request: HttpRequest
+    :return: JSON 响应，形如 {"ok": true}
+    :rtype: JsonResponse
+    """
+    peer_id = (request.POST.get('peer_id') or '').strip()
+    note = (request.POST.get('note') or '').strip()
+    if not peer_id:
+        return JsonResponse({'ok': False, 'err_msg': '参数错误'}, status=400)
+
+    if not PeerInfoService().update_note(peer_id, note):
+        return JsonResponse({'ok': False, 'err_msg': '设备不存在'}, status=404)
+    return JsonResponse({'ok': True})
+
+
+@request_debug_log
+@require_http_methods(['GET'])
+@login_required(login_url='web_login')
+def device_tags(request: HttpRequest) -> JsonResponse:
+    """
+    获取当前用户可见的所有标签列表
+
+    :param request: Http 请求对象
+    :type request: HttpRequest
+    :return: JSON 响应，形如 {"ok": true, "data": ["tag1", "tag2"]}
+    :rtype: JsonResponse
+    """
+    tags = PeerInfoService().get_all_tags_for_user(request.user)
+    return JsonResponse({'ok': True, 'data': tags})

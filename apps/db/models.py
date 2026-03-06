@@ -34,6 +34,24 @@ class HeartBeat(models.Model):
         unique_together = [["uuid", "peer_id"]]
 
 
+class DeviceGroup(TimestampMixin):
+    """
+    设备组模型
+    """
+
+    name = models.CharField(max_length=100, verbose_name="设备组名称", unique=True)
+    note = models.TextField(default="", blank=True, verbose_name="备注")
+
+    class Meta:
+        verbose_name = "设备组"
+        verbose_name_plural = "设备组"
+        ordering = ["name"]
+        db_table = "device_group"
+
+    def __str__(self):
+        return self.name
+
+
 class PeerInfo(TimestampMixin):
     """
     客户端上报的客户端信息模型
@@ -49,6 +67,16 @@ class PeerInfo(TimestampMixin):
     )
     uuid = models.CharField(max_length=255, unique=True, verbose_name="设备UUID")
     version = models.CharField(max_length=50, verbose_name="客户端版本")
+    is_enabled = models.BooleanField(default=True, verbose_name="是否启用")
+    note = models.TextField(default="", blank=True, verbose_name="备注")
+    device_group = models.ForeignKey(
+        DeviceGroup,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="peers",
+        verbose_name="所属设备组",
+    )
 
     class Meta:
         verbose_name = "客户端上报的客户端信息"

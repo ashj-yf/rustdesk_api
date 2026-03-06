@@ -124,39 +124,110 @@
         }, false);
 
         contentEl.addEventListener('change', function (e) {
+            const {updateMultiBar} = getNav2();
             const target = e.target;
             if (target && target.id === 'nav2-select-all') {
                 const check = !!target.checked;
-                document.querySelectorAll('.nav2-row-checkbox').forEach(cb => {
+                document.querySelectorAll('.nav2-row-checkbox').forEach(function (cb) {
                     cb.checked = check;
                 });
+                updateMultiBar();
+            }
+            if (target && target.classList.contains('nav2-row-checkbox')) {
+                updateMultiBar();
             }
         }, false);
 
+        // nav-2 行级"更多"按钮 → 打开右键菜单
         contentEl.addEventListener('click', function (e) {
-            const btn = e.target.closest('.nav2-bulk-btn');
+            const btn = e.target.closest('.nav2-row-action[data-action="more"]');
             if (!btn) return;
             e.preventDefault();
-            // TODO: 实现批量操作逻辑
+            e.stopPropagation();
+            const peerId = btn.dataset.id || '';
+            if (!peerId) return;
+            const rect = btn.getBoundingClientRect();
+            const {showContextMenu} = getNav2();
+            showContextMenu(peerId, rect.left, rect.bottom + 4);
         }, false);
 
+        // nav-2 右键菜单事件
+        contentEl.addEventListener('contextmenu', function (e) {
+            const row = e.target.closest('.nav2-table tbody tr[data-peer-id]');
+            if (!row) return;
+            e.preventDefault();
+            const peerId = row.getAttribute('data-peer-id') || '';
+            if (!peerId) return;
+            const {showContextMenu} = getNav2();
+            showContextMenu(peerId, e.clientX, e.clientY);
+        }, false);
+
+        // 右键菜单项点击
+        document.addEventListener('click', function (e) {
+            const item = e.target.closest('.nav2-context-item');
+            if (item) {
+                e.preventDefault();
+                const action = item.getAttribute('data-ctx') || '';
+                const {handleContextAction} = getNav2();
+                handleContextAction(action);
+                return;
+            }
+            const {hideContextMenu} = getNav2();
+            hideContextMenu();
+        }, false);
+
+        // nav-2 批量操作工具栏
         contentEl.addEventListener('click', function (e) {
-            const {fetchAndShowDetail, prefillRenameForm} = getNav2();
-            const {showAddDeviceModal} = getNav4();
-            const {open: openModal} = getModal();
-            const btn = e.target.closest('.nav2-row-action');
+            const btn = e.target.closest('[data-batch]');
             if (!btn) return;
             e.preventDefault();
-            const action = btn.dataset.action || '';
-            const id = btn.dataset.id || '';
-            if (action === 'view') {
-                fetchAndShowDetail(id);
-            } else if (action === 'rename') {
-                prefillRenameForm(id, btn.dataset.alias || '');
-                openModal('nav2-rename-root');
+            const action = btn.getAttribute('data-batch') || '';
+            const {getSelectedPeerIds, showDeleteConfirm, toggleDevices, clearSelection} = getNav2();
+            const ids = getSelectedPeerIds();
+            if (!ids.length) {
+                getUtils().showToast('请先选择设备', 'error');
+                return;
+            }
+            if (action === 'delete') {
+                showDeleteConfirm(ids);
+            } else if (action === 'enable') {
+                toggleDevices(ids, true);
+            } else if (action === 'disable') {
+                toggleDevices(ids, false);
             } else if (action === 'add_to_book') {
-                showAddDeviceModal(id);
+                if (ids.length === 1) {
+                    const {showAddDeviceModal} = getNav4();
+                    if (showAddDeviceModal) showAddDeviceModal(ids[0]);
+                } else {
+                    getUtils().showToast('批量添加地址簿暂只支持逐个添加', 'info');
+                }
             }
+        }, false);
+
+        // nav-2 批量选择关闭
+        contentEl.addEventListener('click', function (e) {
+            if (!e.target.closest('#nav2-multi-close')) return;
+            e.preventDefault();
+            const {clearSelection} = getNav2();
+            clearSelection();
+        }, false);
+
+        // nav-2 标签过滤面板
+        contentEl.addEventListener('click', function (e) {
+            const item = e.target.closest('.nav2-tag-item');
+            if (!item) return;
+            e.preventDefault();
+            const tag = item.getAttribute('data-tag-value') || '';
+            const {setTagFilter} = getNav2();
+            setTagFilter(tag);
+        }, false);
+
+        // nav-2 删除确认
+        contentEl.addEventListener('click', function (e) {
+            if (!e.target.closest('#nav2-delete-confirm-btn')) return;
+            e.preventDefault();
+            const {confirmDelete} = getNav2();
+            confirmDelete();
         }, false);
 
         contentEl.addEventListener('click', function (e) {
@@ -238,6 +309,15 @@
             }).catch(err => {
                 showToast(err.message || '重命名失败，请稍后重试', 'error');
             });
+        }, false);
+
+        // nav-2 备注表单
+        contentEl.addEventListener('submit', function (e) {
+            const formEl = e.target;
+            if (!formEl || formEl.id !== 'nav2-note-form') return;
+            e.preventDefault();
+            const {submitNote} = getNav2();
+            submitNote();
         }, false);
 
         // nav-2 搜索表单
@@ -643,8 +723,14 @@
         }, false);
     }
 
+    function openAddToBook(peerId) {
+        const {showAddDeviceModal} = getNav4();
+        if (showAddDeviceModal) showAddDeviceModal(peerId);
+    }
+
     APP.events = {
-        init
+        init: init,
+        openAddToBook: openAddToBook
     };
 
     window.APP = APP;

@@ -237,10 +237,252 @@
     max-width: 60vw;
 }
 
+/* 两栏布局：标签面板 + 设备列表 */
+.nav2-layout {
+    display: flex;
+    gap: 16px;
+    align-items: flex-start;
+}
+
+.nav2-main {
+    flex: 1;
+    min-width: 0;
+}
+
+/* 左侧标签过滤面板 */
+.nav2-tag-panel {
+    width: 160px;
+    min-width: 130px;
+    flex-shrink: 0;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-card);
+    background: var(--color-bg);
+    padding: 10px 0;
+}
+
+.nav2-tag-panel-title {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--color-text-secondary);
+    padding: 0 12px 8px;
+    border-bottom: 1px solid var(--color-border);
+    margin-bottom: 4px;
+}
+
+.nav2-tag-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    max-height: 400px;
+    overflow-y: auto;
+}
+
+.nav2-tag-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 12px;
+    font-size: 13px;
+    color: var(--color-text);
+    cursor: pointer;
+    transition: background .12s;
+    user-select: none;
+}
+
+.nav2-tag-item:hover {
+    background: var(--color-hover-bg);
+}
+
+.nav2-tag-item--active {
+    background: var(--color-active-bg);
+    color: var(--color-link);
+    font-weight: 600;
+}
+
+.nav2-tag-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--color-text-hint);
+    flex-shrink: 0;
+}
+
+.nav2-tag-item--active .nav2-tag-dot {
+    background: var(--color-link);
+}
+
+.nav2-tag-count {
+    margin-left: auto;
+    font-size: 11px;
+    color: var(--color-text-hint);
+}
+
+.nav2-tag-empty {
+    padding: 10px 12px;
+    font-size: 12px;
+    color: var(--color-text-hint);
+}
+
+/* 批量操作工具栏 */
+.nav2-multi-bar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    margin-bottom: 10px;
+    background: var(--color-active-bg);
+    border: 1px solid var(--color-link);
+    border-radius: var(--radius-card);
+    font-size: 13px;
+    color: var(--color-text);
+}
+
+.nav2-multi-bar-count {
+    font-weight: 600;
+    color: var(--color-link);
+    margin-right: 4px;
+}
+
+.nav2-multi-bar .nav2-btn {
+    padding: 4px 10px;
+    font-size: 13px;
+}
+
+.nav2-multi-bar-close {
+    margin-left: auto;
+    background: none;
+    border: none;
+    color: var(--color-text-secondary);
+    cursor: pointer;
+    font-size: 16px;
+    padding: 0 4px;
+    line-height: 1;
+}
+
+.nav2-multi-bar-close:hover {
+    color: var(--color-text);
+}
+
+/* 右键上下文菜单 */
+.nav2-context-menu {
+    position: fixed;
+    z-index: 9000;
+    min-width: 160px;
+    background: var(--color-bg);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-card);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+    padding: 4px 0;
+    display: none;
+}
+
+.nav2-context-menu--show {
+    display: block;
+}
+
+.nav2-context-item {
+    display: block;
+    width: 100%;
+    padding: 7px 14px;
+    font-size: 13px;
+    color: var(--color-text);
+    background: none;
+    border: none;
+    text-align: left;
+    cursor: pointer;
+    transition: background .1s;
+}
+
+.nav2-context-item:hover {
+    background: var(--color-hover-bg);
+}
+
+.nav2-context-item--danger {
+    color: var(--color-danger);
+}
+
+.nav2-context-item--danger:hover {
+    background: #fef2f2;
+}
+
+.nav2-context-divider {
+    height: 1px;
+    background: var(--color-border);
+    margin: 4px 0;
+}
+
+/* 禁用设备行样式 */
+.nav2-row--disabled {
+    opacity: 0.5;
+}
+
+.nav2-row--disabled td {
+    color: var(--color-text-hint);
+}
+
+/* 启用状态徽章 */
+.nav2-enabled-badge {
+    display: inline-block;
+    padding: 1px 6px;
+    border-radius: 999px;
+    font-size: 11px;
+    line-height: 1.5;
+}
+
+.nav2-enabled-badge--on {
+    color: #065f46;
+    background: #ecfdf5;
+    border: 1px solid #a7f3d0;
+}
+
+.nav2-enabled-badge--off {
+    color: #b91c1c;
+    background: #fef2f2;
+    border: 1px solid #fecaca;
+}
+
+/* 备注单元格 */
+.nav2-note-cell {
+    max-width: 150px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    color: var(--color-text-secondary);
+    font-size: 13px;
+}
+
+/* 别名单元格 */
+.nav2-alias-cell {
+    color: var(--color-link);
+    font-size: 13px;
+}
+
+/* 重置搜索按钮 */
+.nav2-reset-btn {
+    color: var(--color-text-secondary);
+}
+
+/* 排序下拉 */
+.nav2-sort-select {
+    font-size: 13px;
+}
+
 @media (max-width: 768px) {
-    .nav2-table th[data-col-key="created"],
-    .nav2-table td[data-col-key="created"] {
+    .nav2-table th[data-col-key="created_at"],
+    .nav2-table td[data-col-key="created_at"],
+    .nav2-table th[data-col-key="note"],
+    .nav2-table td[data-col-key="note"],
+    .nav2-table th[data-col-key="version"],
+    .nav2-table td[data-col-key="version"] {
         display: none;
+    }
+
+    .nav2-tag-panel {
+        display: none;
+    }
+
+    .nav2-layout {
+        flex-direction: column;
     }
 }
 
@@ -266,5 +508,9 @@
     .nav2-pagination {
         flex-wrap: wrap;
         justify-content: center;
+    }
+
+    .nav2-multi-bar {
+        flex-wrap: wrap;
     }
 }
