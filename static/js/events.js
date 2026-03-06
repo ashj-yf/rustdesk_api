@@ -37,6 +37,10 @@
         return APP.perm || {};
     }
 
+    function getGroup() {
+        return APP.group || {};
+    }
+
     function getConstants() {
         return {
             STORAGE_KEY: APP.STORAGE_KEY || 'homeActiveNavKey',
@@ -570,6 +574,112 @@
             const roleId = cb.getAttribute('data-role-id');
             const {toggleGroupRole} = getPerm();
             if (toggleGroupRole) toggleGroupRole(groupId, roleId, cb.checked);
+        }, false);
+
+        // ========== nav-3 标签切换事件 ==========
+
+        contentEl.addEventListener('click', function (e) {
+            const tab = e.target.closest('.nav3-tab');
+            if (!tab) return;
+            e.preventDefault();
+            const tabKey = tab.getAttribute('data-tab');
+            if (!tabKey) return;
+            const params = tabKey === 'groups' ? {tab: 'groups'} : {};
+            reloadNav('nav-3', params);
+        }, false);
+
+        // ========== nav-3 用户组管理事件 ==========
+
+        contentEl.addEventListener('click', function (e) {
+            const btn = e.target.closest('.nav3-group-create-btn');
+            if (!btn) return;
+            e.preventDefault();
+            const {openGroupEditor} = getGroup();
+            if (openGroupEditor) openGroupEditor(null, '');
+        }, false);
+
+        contentEl.addEventListener('submit', function (e) {
+            const formEl = e.target;
+            if (!formEl || formEl.id !== 'nav3-group-edit-form') return;
+            e.preventDefault();
+            const {submitGroupEditor} = getGroup();
+            if (submitGroupEditor) submitGroupEditor();
+        }, false);
+
+        contentEl.addEventListener('submit', function (e) {
+            const formEl = e.target;
+            if (!formEl || formEl.id !== 'nav3-group-search-form') return;
+            e.preventDefault();
+            const {collectQueryOptions} = getGroup();
+            reloadNav('nav-3', collectQueryOptions(formEl));
+        }, false);
+
+        contentEl.addEventListener('click', function (e) {
+            const btn = e.target.closest('.nav3-group-reset-btn');
+            if (!btn) return;
+            e.preventDefault();
+            reloadNav('nav-3', {tab: 'groups'});
+        }, false);
+
+        contentEl.addEventListener('click', function (e) {
+            const btn = e.target.closest('.nav3-group-page-btn');
+            if (!btn) return;
+            e.preventDefault();
+            const page = btn.dataset.page;
+            if (page) {
+                const {collectQueryOptions} = getGroup();
+                const extra = collectQueryOptions(document.getElementById('nav3-group-search-form'));
+                extra.page = page;
+                reloadNav('nav-3', extra);
+            }
+        }, false);
+
+        contentEl.addEventListener('click', function (e) {
+            const btn = e.target.closest('.nav3-group-row-action');
+            if (!btn) return;
+            e.preventDefault();
+            const action = btn.getAttribute('data-action') || '';
+            const groupId = btn.getAttribute('data-group-id') || '';
+            const groupName = btn.getAttribute('data-group-name') || '';
+            if (!action || !groupId) return;
+
+            if (action === 'edit') {
+                const {openGroupEditor} = getGroup();
+                if (openGroupEditor) openGroupEditor(groupId, groupName);
+            } else if (action === 'members') {
+                const {openGroupMembers} = getGroup();
+                if (openGroupMembers) openGroupMembers(groupId, groupName);
+            } else if (action === 'roles') {
+                const {openAssignGroupRole} = getPerm();
+                if (openAssignGroupRole) openAssignGroupRole(groupId, groupName);
+            } else if (action === 'delete') {
+                const {deleteGroup} = getGroup();
+                if (deleteGroup) deleteGroup(groupId, groupName);
+            }
+        }, false);
+
+        contentEl.addEventListener('click', function (e) {
+            const btn = e.target.closest('.nav3-group-add-member-btn');
+            if (!btn) return;
+            e.preventDefault();
+            const groupId = (document.getElementById('nav3-group-members-id')?.value || '').trim();
+            const usernameInput = document.getElementById('nav3-group-members-username');
+            const username = (usernameInput?.value || '').trim();
+            if (!groupId) return;
+            const {addMember} = getGroup();
+            if (addMember) addMember(groupId, username);
+        }, false);
+
+        contentEl.addEventListener('click', function (e) {
+            const btn = e.target.closest('.nav3-group-remove-member-btn');
+            if (!btn) return;
+            e.preventDefault();
+            const groupId = (document.getElementById('nav3-group-members-id')?.value || '').trim();
+            const userId = btn.getAttribute('data-user-id') || '';
+            const username = btn.getAttribute('data-username') || '';
+            if (!groupId || !userId) return;
+            const {removeMember} = getGroup();
+            if (removeMember) removeMember(groupId, userId, username);
         }, false);
 
         // ========== nav-4 事件 ==========

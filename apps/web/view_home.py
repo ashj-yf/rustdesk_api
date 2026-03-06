@@ -9,11 +9,11 @@ from django.shortcuts import render
 from django.views.decorators.http import require_http_methods
 
 from apps.client_apis.common import request_debug_log
-from apps.db.models import DevicePermission, UserRole
+from apps.db.models import DevicePermission, UserRole, GroupRole
 from apps.db.service import (
     UserService, PeerInfoService, PersonalService,
     AliasService, HeartBeatService, ClientTagsService,
-    PermissionService,
+    PermissionService, GroupService,
 )
 from apps.web.view_personal import is_default_personal
 
@@ -146,6 +146,9 @@ def nav_content(request: HttpRequest) -> HttpResponse:
             'all_tags': all_tags,
         })
     elif key == 'nav-3':  # 用户管理
+        tab = (request.GET.get('tab') or '').strip() or 'users'
+        context['tab'] = tab
+
         try:
             page = int(request.GET.get('page', 1))
         except (TypeError, ValueError):
@@ -154,27 +157,50 @@ def nav_content(request: HttpRequest) -> HttpResponse:
             page_size = int(request.GET.get('page_size', 20))
         except (TypeError, ValueError):
             page_size = 20
-        q = (request.GET.get('q') or '').strip()
 
-        user_qs = UserService().get_active_users_qs(q=q)
-        paginator = Paginator(user_qs, page_size)
-        page_obj = paginator.get_page(page)
-        users = list(page_obj.object_list)
+        if tab == 'groups':
+            q = (request.GET.get('q') or '').strip()
+            group_service = GroupService()
+            group_qs = group_service.get_groups_qs(q=q)
+            paginator = Paginator(group_qs, page_size)
+            page_obj = paginator.get_page(page)
+            groups = list(page_obj.object_list)
 
-        user_ids = [u.id for u in users]
-        role_map = {}
-        for ur in UserRole.objects.filter(user_id__in=user_ids).select_related('role'):
-            role_map.setdefault(ur.user_id, []).append(ur.role.name)
-        for u in users:
-            u.role_names = ', '.join(role_map.get(u.id, []))
+            group_ids = [g.id for g in groups]
+            role_map = {}
+            for gr in GroupRole.objects.filter(group_id__in=group_ids).select_related('role'):
+                role_map.setdefault(gr.group_id, []).append(gr.role.name)
+            for g in groups:
+                g.member_count = group_service.count_group_members(g.id)
+                g.role_names = ', '.join(role_map.get(g.id, []))
 
-        context.update({
-            'users': users,
-            'paginator': paginator,
-            'page_obj': page_obj,
-            'page_size': page_size,
-            'q': q,
-        })
+            context.update({
+                'groups': groups,
+                'group_paginator': paginator,
+                'group_page_obj': page_obj,
+                'group_q': q,
+            })
+        else:
+            q = (request.GET.get('q') or '').strip()
+            user_qs = UserService().get_active_users_qs(q=q)
+            paginator = Paginator(user_qs, page_size)
+            page_obj = paginator.get_page(page)
+            users = list(page_obj.object_list)
+
+            user_ids = [u.id for u in users]
+            role_map = {}
+            for ur in UserRole.objects.filter(user_id__in=user_ids).select_related('role'):
+                role_map.setdefault(ur.user_id, []).append(ur.role.name)
+            for u in users:
+                u.role_names = ', '.join(role_map.get(u.id, []))
+
+            context.update({
+                'users': users,
+                'paginator': paginator,
+                'page_obj': page_obj,
+                'page_size': page_size,
+                'q': q,
+            })
     elif key == 'nav-4':  # 地址簿
         try:
             page = int(request.GET.get('page', 1))

@@ -1,6 +1,6 @@
 from django.urls import path
 
-from apps.web import view_auth, view_home, view_user, view_personal, view_permission
+from apps.web import view_auth, view_home, view_user, view_personal, view_permission, view_group
 
 urlpatterns = [
     path('', view_auth.index),
@@ -39,6 +39,14 @@ urlpatterns = [
     path('role/user-roles', view_permission.user_roles, name='web_user_roles'),
     path('role/assign', view_permission.user_role_assign, name='web_role_assign'),
     path('role/remove', view_permission.user_role_remove, name='web_role_remove'),
+    # 用户组管理
+    path('group/list', view_group.group_list, name='web_group_list'),
+    path('group/create', view_group.group_create, name='web_group_create'),
+    path('group/update', view_group.group_update, name='web_group_update'),
+    path('group/delete', view_group.group_delete, name='web_group_delete'),
+    path('group/members', view_group.group_members, name='web_group_members'),
+    path('group/add-member', view_group.group_add_member, name='web_group_add_member'),
+    path('group/remove-member', view_group.group_remove_member, name='web_group_remove_member'),
     # 用户组-角色
     path('group-role/list', view_permission.group_roles, name='web_group_roles'),
     path('group-role/assign', view_permission.group_role_assign, name='web_group_role_assign'),

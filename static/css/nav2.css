@@ -596,4 +596,76 @@
     .nav2-multi-bar {
         flex-wrap: wrap;
     }
+
+    .nav3-tabs {
+        flex-wrap: wrap;
+    }
+}
+
+/* ========== nav-3 标签栏 ========== */
+
+.nav3-tabs {
+    display: flex;
+    gap: 0;
+    margin-bottom: 16px;
+    border-bottom: 1px solid #eaeef2;
+}
+
+.nav3-tab {
+    padding: 8px 20px;
+    font-size: 14px;
+    color: #6a737d;
+    background: none;
+    border: none;
+    border-bottom: 2px solid transparent;
+    cursor: pointer;
+    transition: color 0.15s, border-color 0.15s;
+}
+
+.nav3-tab:hover {
+    color: #1f2328;
+}
+
+.nav3-tab--active {
+    color: #0b3d60;
+    font-weight: 600;
+    border-bottom-color: #0b3d60;
+}
+
+.nav3-tab:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 3px rgba(31, 111, 235, 0.2);
+}
+
+/* ========== nav-3 用户组成员管理 ========== */
+
+.nav3-group-members-info {
+    margin: 0 0 12px;
+    color: #6a737d;
+    font-size: 14px;
+}
+
+.nav3-group-members-add {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 12px;
+}
+
+.nav3-group-members-add .nav2-input {
+    flex: 1;
+}
+
+.nav3-group-members-list {
+    max-height: 360px;
+    overflow-y: auto;
+}
+
+.nav3-group-members-table {
+    margin: 0;
+}
+
+.nav3-group-members-table th,
+.nav3-group-members-table td {
+    padding: 8px 10px;
+    font-size: 13px;
 }

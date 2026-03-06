@@ -274,6 +274,105 @@ class GroupService(BaseService):
             group = self.create_group(name=self.default_group_name)
         return group
 
+    def get_groups_qs(self, q: str = ''):
+        """
+        获取用户组查询集（支持按名称搜索），供分页使用
+
+        :param q: 搜索关键词，按名称模糊匹配
+        :type q: str
+        :return: 用户组 QuerySet
+        :rtype: QuerySet
+        """
+        qs = self.db.objects.all()
+        if q:
+            qs = qs.filter(name__icontains=q)
+        return qs.order_by('id')
+
+    def update_group(self, group_id: int, name: str) -> Group | None:
+        """
+        更新用户组名称
+
+        :param group_id: 用户组 ID
+        :type group_id: int
+        :param name: 新名称
+        :type name: str
+        :return: 更新后的用户组对象，不存在返回 None
+        :rtype: Group | None
+        """
+        group = self.db.objects.filter(id=group_id).first()
+        if not group:
+            return None
+        group.name = name
+        group.save(update_fields=['name'])
+        logger.info(f"更新用户组: id={group_id}, name={name}")
+        return group
+
+    def delete_group(self, group_id: int) -> bool:
+        """
+        删除用户组（Default 组不可删），组内成员自动回落到 Default 组
+
+        :param group_id: 用户组 ID
+        :type group_id: int
+        :return: 是否删除成功
+        :rtype: bool
+        """
+        group = self.db.objects.filter(id=group_id).first()
+        if not group or group.name == self.default_group_name:
+            return False
+        default = self.default_group()
+        with transaction.atomic():
+            UserProfile.objects.filter(group=group).update(group=default)
+            group.delete()
+        logger.info(f"删除用户组: id={group_id}, name={group.name}")
+        return True
+
+    def get_group_members(self, group_id: int):
+        """
+        获取指定组的活跃成员列表
+
+        :param group_id: 用户组 ID
+        :type group_id: int
+        :return: 用户 QuerySet
+        :rtype: QuerySet
+        """
+        user_ids = UserProfile.objects.filter(
+            group_id=group_id
+        ).values_list('user_id', flat=True)
+        return User.objects.filter(id__in=user_ids, is_active=True).order_by('username')
+
+    def remove_user_from_group(self, user_id: int, group_id: int) -> bool:
+        """
+        将用户从指定组移出（回落到 Default 组）
+
+        :param user_id: 用户 ID
+        :type user_id: int
+        :param group_id: 用户组 ID
+        :type group_id: int
+        :return: 是否操作成功
+        :rtype: bool
+        """
+        profile = UserProfile.objects.filter(user_id=user_id, group_id=group_id).first()
+        if not profile:
+            return False
+        default = self.default_group()
+        profile.group = default
+        profile.save(update_fields=['group'])
+        return True
+
+    def count_group_members(self, group_id: int) -> int:
+        """
+        统计指定组的活跃成员数
+
+        :param group_id: 用户组 ID
+        :type group_id: int
+        :return: 成员数量
+        :rtype: int
+        """
+        user_ids = UserProfile.objects.filter(
+            group_id=group_id
+        ).values_list('user_id', flat=True)
+        return User.objects.filter(id__in=user_ids, is_active=True).count()
+
     def add_user_to_group(self, *username: User | str, group_name: Group | str = None):
         """
         为用户设置所在组（高效批量）。
