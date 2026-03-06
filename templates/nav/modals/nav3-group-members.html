@@ -1,0 +1,23 @@
+{% load static %}
+<div id="nav3-group-members-root" class="modal-backdrop" aria-hidden="true">
+    <div class="modal modal--md" role="dialog" aria-modal="true" aria-labelledby="nav3-group-members-title">
+        <div class="modal-header">
+            <h3 id="nav3-group-members-title" class="modal-title">成员管理</h3>
+            <button type="button" class="modal-close" data-close="nav3-group-members" aria-label="关闭">
+                <img src="{% static 'icons/close.svg' %}" width="16" height="16" alt="" aria-hidden="true">
+            </button>
+        </div>
+        <div class="modal-body">
+            <p class="nav3-group-members-info">
+                用户组：<strong id="nav3-group-members-name"></strong>
+            </p>
+            <input type="hidden" id="nav3-group-members-id" value="">
+            <div class="nav3-group-members-add">
+                <input class="nav2-input" type="text" id="nav3-group-members-username"
+                       placeholder="输入用户名添加成员" aria-label="添加成员用户名">
+                <button type="button" class="nav2-btn nav2-primary nav3-group-add-member-btn">添加</button>
+            </div>
+            <div id="nav3-group-members-list" class="nav3-group-members-list"></div>
+        </div>
+    </div>
+</div>

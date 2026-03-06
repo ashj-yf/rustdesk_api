@@ -1,0 +1,34 @@
+{% load static %}
+<div id="nav3-role-edit-root" class="modal-backdrop" aria-hidden="true">
+    <div class="modal modal--sm" role="dialog" aria-modal="true" aria-labelledby="nav3-role-edit-title">
+        <div class="modal-header">
+            <h3 id="nav3-role-edit-title" class="modal-title">添加角色</h3>
+            <button type="button" class="modal-close" data-close="nav3-role-edit" aria-label="关闭">
+                <img src="{% static 'icons/close.svg' %}" width="16" height="16" alt="" aria-hidden="true">
+            </button>
+        </div>
+        <div class="modal-body">
+            <form id="nav3-role-edit-form">
+                <input type="hidden" name="role_id" id="nav3-role-edit-id" value="">
+                <div class="nav3-role-form-group">
+                    <label for="nav3-role-edit-name">角色名称</label>
+                    <input class="nav2-input nav2-input-full" type="text" name="name"
+                           id="nav3-role-edit-name" placeholder="请输入角色名称" required>
+                </div>
+                <div class="nav3-role-form-group">
+                    <label for="nav3-role-edit-note">备注</label>
+                    <input class="nav2-input nav2-input-full" type="text" name="note"
+                           id="nav3-role-edit-note" placeholder="可选">
+                </div>
+                <div class="nav3-role-form-group">
+                    <label>权限</label>
+                    <div class="nav3-perm-row" id="nav3-role-edit-perm-cbs"></div>
+                </div>
+                <div class="nav2-form-actions">
+                    <button type="button" class="nav2-btn" data-close="nav3-role-edit">取消</button>
+                    <button type="submit" class="nav2-btn nav2-primary">保存</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>

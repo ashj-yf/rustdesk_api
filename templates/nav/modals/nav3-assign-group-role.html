@@ -1,0 +1,18 @@
+{% load static %}
+<div id="nav3-assign-group-role-root" class="modal-backdrop" aria-hidden="true">
+    <div class="modal modal--sm" role="dialog" aria-modal="true" aria-labelledby="nav3-assign-group-role-title">
+        <div class="modal-header">
+            <h3 id="nav3-assign-group-role-title" class="modal-title">用户组角色分配</h3>
+            <button type="button" class="modal-close" data-close="nav3-assign-group-role" aria-label="关闭">
+                <img src="{% static 'icons/close.svg' %}" width="16" height="16" alt="" aria-hidden="true">
+            </button>
+        </div>
+        <div class="modal-body">
+            <p style="margin:0 0 10px;color:#6a737d;">
+                用户组：<strong id="nav3-assign-group-role-name"></strong>
+            </p>
+            <div id="nav3-assign-group-role-list" style="max-height:320px;overflow-y:auto;"></div>
+            <input type="hidden" id="nav3-assign-group-role-id" value="">
+        </div>
+    </div>
+</div>

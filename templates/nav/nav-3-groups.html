@@ -1,0 +1,87 @@
+<div class="nav2-section-title">用户组管理</div>
+<div class="nav2-toolbar" aria-label="用户组工具栏">
+    <form id="nav3-group-search-form" role="search" aria-label="用户组搜索筛选">
+        <input type="hidden" name="tab" value="groups">
+        <input class="nav2-input" type="text" name="q" value="{{ group_q|default:'' }}" placeholder="搜索用户组名称"
+               aria-label="搜索关键词">
+        <button type="submit" class="nav2-btn nav2-primary">搜索</button>
+        <button type="button" class="nav2-btn nav3-group-reset-btn">重置</button>
+    </form>
+    <div class="nav2-toolbar-actions">
+        <button type="button" class="nav2-btn nav2-primary nav3-group-create-btn">新建用户组</button>
+    </div>
+</div>
+
+{% if groups %}
+    <div class="x-scroll-container">
+        <table class="nav2-table" aria-label="用户组列表" data-table-id="nav3-groups">
+            <thead>
+            <tr>
+                <th data-col-key="id" style="width: 60px;">ID</th>
+                <th data-col-key="name" style="width: 160px;">名称</th>
+                <th data-col-key="member_count" style="width: 100px;">成员数</th>
+                <th data-col-key="role_names" style="width: 200px;">角色</th>
+                <th data-col-key="actions" style="width: 280px;">操作</th>
+            </tr>
+            </thead>
+            <tbody>
+            {% for g in groups %}
+                <tr>
+                    <td>{{ g.id }}</td>
+                    <td>{{ g.name }}</td>
+                    <td>{{ g.member_count }}</td>
+                    <td>{{ g.role_names|default:'-' }}</td>
+                    <td>
+                        <div class="nav2-row-actions">
+                            <button type="button"
+                                    class="nav2-btn nav3-group-row-action"
+                                    data-action="edit"
+                                    data-group-id="{{ g.id }}"
+                                    data-group-name="{{ g.name }}">编辑
+                            </button>
+                            <button type="button"
+                                    class="nav2-btn nav3-group-row-action"
+                                    data-action="members"
+                                    data-group-id="{{ g.id }}"
+                                    data-group-name="{{ g.name }}">成员
+                            </button>
+                            <button type="button"
+                                    class="nav2-btn nav3-group-row-action"
+                                    data-action="roles"
+                                    data-group-id="{{ g.id }}"
+                                    data-group-name="{{ g.name }}">角色
+                            </button>
+                            {% if g.name != 'Default' %}
+                                <button type="button"
+                                        class="nav2-btn nav3-group-row-action"
+                                        data-action="delete"
+                                        data-group-id="{{ g.id }}"
+                                        data-group-name="{{ g.name }}">删除
+                                </button>
+                            {% endif %}
+                        </div>
+                    </td>
+                </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    <div class="nav2-pagination">
+        <button class="nav2-btn nav3-group-page-btn" data-key="nav-3"
+                {% if group_page_obj.has_previous %}data-page="{{ group_page_obj.previous_page_number }}"
+                {% else %}data-page=""
+                disabled{% endif %}>上一页
+        </button>
+        <span class="nav2-pagination-info">第 {{ group_page_obj.number }} / {{ group_paginator.num_pages }} 页（共 {{ group_paginator.count }} 条）</span>
+        <button class="nav2-btn nav3-group-page-btn" data-key="nav-3"
+                {% if group_page_obj.has_next %}data-page="{{ group_page_obj.next_page_number }}"{% else %}data-page=""
+                disabled{% endif %}>下一页
+        </button>
+    </div>
+{% else %}
+    <div class="nav2-empty">暂无用户组数据</div>
+{% endif %}
+
+{% include "nav/modals/nav3-group-edit.html" %}
+{% include "nav/modals/nav3-group-members.html" %}
+{% include "nav/modals/nav3-assign-group-role.html" %}

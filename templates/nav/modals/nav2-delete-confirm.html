@@ -1,0 +1,21 @@
+{% load static %}
+<div id="nav2-delete-root" class="modal-backdrop" aria-hidden="true">
+    <div class="modal modal--sm" role="dialog" aria-modal="true" aria-labelledby="nav2-delete-title">
+        <div class="modal-header">
+            <h3 id="nav2-delete-title" class="modal-title">确认删除</h3>
+            <button type="button" class="modal-close" data-close="nav2-delete" aria-label="关闭">
+                <img src="{% static 'icons/close.svg' %}" width="16" height="16" alt="" aria-hidden="true">
+            </button>
+        </div>
+        <div class="modal-body">
+            <p id="nav2-delete-msg" style="margin:0 0 16px;color:#1f2328;">确定要删除选中的设备吗？此操作不可恢复。</p>
+            <input type="hidden" id="nav2-delete-peer-ids">
+            <div class="nav2-form-actions">
+                <button type="button" class="nav2-btn" data-close="nav2-delete">取消</button>
+                <button type="button" class="nav2-btn nav2-danger" id="nav2-delete-confirm-btn"
+                        style="background:#b91c1c;color:#fff;border-color:#b91c1c;">确认删除
+                </button>
+            </div>
+        </div>
+    </div>
+</div>

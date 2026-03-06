@@ -1,0 +1,109 @@
+<div class="nav2-section-title">用户管理</div>
+<div class="nav2-toolbar" aria-label="用户工具栏">
+    <form id="nav3-search-form" role="search" aria-label="用户搜索筛选">
+        <input class="nav2-input" type="text" name="q" value="{{ q|default:'' }}" placeholder="搜索用户名/邮箱/姓名"
+               aria-label="搜索关键词">
+        <button type="submit" class="nav2-btn nav2-primary">搜索</button>
+        <button type="button" class="nav2-btn nav3-reset-btn">重置</button>
+    </form>
+    <div class="nav2-toolbar-actions">
+        <button type="button" class="nav2-btn nav3-role-manage-btn">角色管理</button>
+        <button type="button" class="nav2-btn nav2-primary nav3-create-btn">新建用户</button>
+    </div>
+</div>
+
+{% if users %}
+    <div class="x-scroll-container">
+        <table class="nav2-table" aria-label="用户列表" data-table-id="nav3-users">
+            <thead>
+            <tr>
+                <th data-col-key="username" style="width: 70px;">用户名</th>
+                <th data-col-key="full_name" style="width: 90px;">姓名</th>
+                <th data-col-key="email" style="width: 180px;">邮箱</th>
+                <th data-col-key="is_active" style="width: 100px;">状态</th>
+                <th data-col-key="is_staff" style="width: 100px;">管理员</th>
+                <th data-col-key="roles" style="width: 140px;">角色</th>
+                <th data-col-key="last_login" style="width: 180px;">最近登录</th>
+                <th data-col-key="date_joined" style="width: 180px;">创建时间</th>
+                <th data-col-key="actions" style="width: 240px;">操作</th>
+            </tr>
+            </thead>
+            <tbody>
+            {% for u in users %}
+                <tr>
+                    <td>{{ u.username }}</td>
+                    <td>{{ u.get_full_name|default:'-' }}</td>
+                    <td>{{ u.email|default:'-' }}</td>
+                    <td>
+                        {% if u.is_active %}
+                            <span class="nav2-status online">正常</span>
+                        {% else %}
+                            <span class="nav2-status offline">已删除</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if u.is_staff %}
+                            <span class="nav2-status online">是</span>
+                        {% else %}
+                            <span class="nav2-status offline">否</span>
+                        {% endif %}
+                    </td>
+                    <td>{{ u.role_names|default:'-' }}</td>
+                    <td>{{ u.last_login|date:"Y-m-d H:i:s"|default:'-' }}</td>
+                    <td>{{ u.date_joined|date:"Y-m-d H:i:s" }}</td>
+                    <td>
+                        <div class="nav2-row-actions">
+                            <button type="button"
+                                    class="nav2-btn nav3-row-action"
+                                    data-action="edit"
+                                    data-username="{{ u.username }}"
+                                    data-fullname="{{ u.get_full_name|default:'' }}"
+                                    data-email="{{ u.email|default:'' }}"
+                                    data-is_staff="{% if u.is_staff %}1{% else %}0{% endif %}">编辑
+                            </button>
+                            <button type="button"
+                                    class="nav2-btn nav3-row-action"
+                                    data-action="roles"
+                                    data-username="{{ u.username }}">角色
+                            </button>
+                            <button type="button"
+                                    class="nav2-btn nav3-row-action"
+                                    data-action="reset_pwd"
+                                    data-username="{{ u.username }}">重置密码
+                            </button>
+                            {% if u.id != 1 %}
+                                <button type="button"
+                                        class="nav2-btn nav3-row-action"
+                                        data-action="delete"
+                                        data-username="{{ u.username }}">删除
+                                </button>
+                            {% endif %}
+                        </div>
+                    </td>
+                </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    <div class="nav2-pagination">
+        <button class="nav2-btn nav3-page-btn" data-key="nav-3"
+                {% if page_obj.has_previous %}data-page="{{ page_obj.previous_page_number }}"{% else %}data-page=""
+                disabled{% endif %}>上一页
+        </button>
+        <span class="nav2-pagination-info">第 {{ page_obj.number }} / {{ paginator.num_pages }} 页（共 {{ paginator.count }} 条）</span>
+        <button class="nav2-btn nav3-page-btn" data-key="nav-3"
+                {% if page_obj.has_next %}data-page="{{ page_obj.next_page_number }}"{% else %}data-page=""
+                disabled{% endif %}>下一页
+        </button>
+    </div>
+{% else %}
+    <div class="nav2-empty">暂无用户数据</div>
+{% endif %}
+
+{% include "nav/modals/nav3-edit.html" %}
+{% include "nav/modals/nav3-reset.html" %}
+{% include "nav/modals/nav3-create.html" %}
+{% include "nav/modals/nav3-roles.html" %}
+{% include "nav/modals/nav3-role-edit.html" %}
+{% include "nav/modals/nav3-assign-role.html" %}
+{% include "nav/modals/nav3-assign-group-role.html" %}

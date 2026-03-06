@@ -1,0 +1,25 @@
+{% load static %}
+<div id="nav3-group-edit-root" class="modal-backdrop" aria-hidden="true">
+    <div class="modal modal--sm" role="dialog" aria-modal="true" aria-labelledby="nav3-group-edit-title">
+        <div class="modal-header">
+            <h3 id="nav3-group-edit-title" class="modal-title">新建用户组</h3>
+            <button type="button" class="modal-close" data-close="nav3-group-edit" aria-label="关闭">
+                <img src="{% static 'icons/close.svg' %}" width="16" height="16" alt="" aria-hidden="true">
+            </button>
+        </div>
+        <div class="modal-body">
+            <form id="nav3-group-edit-form">
+                <input type="hidden" id="nav3-group-edit-id" name="group_id" value="">
+                <div class="nav2-form-row">
+                    <label for="nav3-group-edit-name">名称</label>
+                    <input class="nav2-input nav2-input-full" type="text" name="name" id="nav3-group-edit-name"
+                           placeholder="请输入用户组名称" required>
+                </div>
+                <div class="nav2-form-actions">
+                    <button type="button" class="nav2-btn" data-close="nav3-group-edit">取消</button>
+                    <button type="submit" class="nav2-btn nav2-primary">保存</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>

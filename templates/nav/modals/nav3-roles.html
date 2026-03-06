@@ -1,0 +1,31 @@
+{% load static %}
+<div id="nav3-roles-root" class="modal-backdrop" aria-hidden="true">
+    <div class="modal modal--lg" role="dialog" aria-modal="true" aria-labelledby="nav3-roles-title">
+        <div class="modal-header">
+            <h3 id="nav3-roles-title" class="modal-title">角色管理</h3>
+            <div class="modal-header-actions">
+                <button type="button" class="nav2-btn nav2-primary nav3-role-add-btn">添加角色</button>
+                <button type="button" class="modal-close" data-close="nav3-roles" aria-label="关闭">
+                    <img src="{% static 'icons/close.svg' %}" width="16" height="16" alt="" aria-hidden="true">
+                </button>
+            </div>
+        </div>
+        <div class="modal-body">
+            <div class="x-scroll-container">
+                <table class="nav2-table" aria-label="角色列表">
+                    <thead>
+                    <tr>
+                        <th style="width:120px;">名称</th>
+                        <th style="width:160px;">备注</th>
+                        <th style="width:160px;">权限</th>
+                        <th style="width:70px;">用户数</th>
+                        <th style="width:60px;">默认</th>
+                        <th style="width:100px;">操作</th>
+                    </tr>
+                    </thead>
+                    <tbody id="nav3-roles-tbody"></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
