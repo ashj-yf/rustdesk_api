@@ -535,22 +535,17 @@ class TokenService(BaseService):
         user_qs = self.get_user_info(username)
         token = f"{get_randem_md5()}_{username}"
 
-        if qs := self.db.objects.filter(user_id=user_qs.id, uuid=uuid, client_type=client_type).first():
-            qs.token = token
-            qs.created_at = get_local_time()
-            qs.last_used_at = get_local_time()
-            qs.save()
-            logger.info(f"更新令牌: user: {username} uuid: {uuid} token: {token}")
-        else:
-            self.db.objects.create(
-                user=user_qs,
-                uuid=uuid,
-                token=token,
-                client_type=client_type,
-                created_at=get_local_time(),
-                last_used_at=get_local_time(),
-            )
-            logger.info(f"创建令牌: user: {username} uuid: {uuid} token: {token}")
+        qs, created = self.db.objects.update_or_create(
+            user=user_qs,
+            uuid=uuid,
+            defaults={
+                'token': token,
+                'client_type': client_type,
+                'created_at': get_local_time(),
+                'last_used_at': get_local_time(),
+            },
+        )
+        logger.info(f"{'创建' if created else '更新'}令牌: user: {username} uuid: {uuid} token: {token}")
         return token
 
     def check_token(self, token, timeout=3600):
