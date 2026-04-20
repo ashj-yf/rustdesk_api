@@ -262,11 +262,9 @@ def peers(request: HttpRequest):
     token_service = TokenService(request=request)
     user_info = token_service.user_info
 
-    # Super admin 不校验权限，直接返回所有设备
-    if not user_info.is_superuser:
-        perm_service = PermissionService()
-        if not perm_service.has_perm(user_info, DevicePermission.VIEW):
-            return JsonResponse({'total': 0, 'data': []})
+    perm_service = PermissionService()
+    if not perm_service.has_perm(user_info, DevicePermission.VIEW):
+        return JsonResponse({'total': 0, 'data': []})
 
     dgp_service = DeviceGroupPeerService()
     client_list = list(PeerInfoService().get_list())

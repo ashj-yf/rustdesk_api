@@ -26,7 +26,7 @@ def role_list(request: HttpRequest) -> JsonResponse:
     :return: JSON 响应，形如 {"ok": true, "data": [...]}
     :rtype: JsonResponse
     """
-    if not request.user.is_staff:
+    if not request.user.is_staff and not request.user.is_superuser:
         return JsonResponse({'ok': False, 'err_msg': '无权限'}, status=403)
     roles = RoleService().list_roles()
     data = []
@@ -53,7 +53,7 @@ def role_create(request: HttpRequest) -> JsonResponse:
     :return: JSON 响应
     :rtype: JsonResponse
     """
-    if not request.user.is_staff:
+    if not request.user.is_staff and not request.user.is_superuser:
         return JsonResponse({'ok': False, 'err_msg': '无权限'}, status=403)
     name = (request.POST.get('name') or '').strip()
     note = (request.POST.get('note') or '').strip()
@@ -80,7 +80,7 @@ def role_update(request: HttpRequest) -> JsonResponse:
     :return: JSON 响应
     :rtype: JsonResponse
     """
-    if not request.user.is_staff:
+    if not request.user.is_staff and not request.user.is_superuser:
         return JsonResponse({'ok': False, 'err_msg': '无权限'}, status=403)
     try:
         role_id = int(request.POST.get('role_id', 0))
@@ -118,7 +118,7 @@ def role_delete(request: HttpRequest) -> JsonResponse:
     :return: JSON 响应
     :rtype: JsonResponse
     """
-    if not request.user.is_staff:
+    if not request.user.is_staff and not request.user.is_superuser:
         return JsonResponse({'ok': False, 'err_msg': '无权限'}, status=403)
     try:
         role_id = int(request.POST.get('role_id', 0))
@@ -143,7 +143,7 @@ def user_roles(request: HttpRequest) -> JsonResponse:
     :return: JSON 响应，data 包含 roles（用户已分配）和 all_roles（所有角色）
     :rtype: JsonResponse
     """
-    if not request.user.is_staff:
+    if not request.user.is_staff and not request.user.is_superuser:
         return JsonResponse({'ok': False, 'err_msg': '无权限'}, status=403)
     username = (request.GET.get('username') or '').strip()
     if not username:
@@ -173,7 +173,7 @@ def user_role_assign(request: HttpRequest) -> JsonResponse:
     :return: JSON 响应
     :rtype: JsonResponse
     """
-    if not request.user.is_staff:
+    if not request.user.is_staff and not request.user.is_superuser:
         return JsonResponse({'ok': False, 'err_msg': '无权限'}, status=403)
     username = (request.POST.get('username') or '').strip()
     try:
@@ -197,7 +197,7 @@ def user_role_remove(request: HttpRequest) -> JsonResponse:
     :return: JSON 响应
     :rtype: JsonResponse
     """
-    if not request.user.is_staff:
+    if not request.user.is_staff and not request.user.is_superuser:
         return JsonResponse({'ok': False, 'err_msg': '无权限'}, status=403)
     username = (request.POST.get('username') or '').strip()
     try:
@@ -224,7 +224,7 @@ def group_roles(request: HttpRequest) -> JsonResponse:
     :return: JSON 响应
     :rtype: JsonResponse
     """
-    if not request.user.is_staff:
+    if not request.user.is_staff and not request.user.is_superuser:
         return JsonResponse({'ok': False, 'err_msg': '无权限'}, status=403)
     try:
         group_id = int(request.GET.get('group_id', 0))
@@ -256,7 +256,7 @@ def group_role_assign(request: HttpRequest) -> JsonResponse:
     :return: JSON 响应
     :rtype: JsonResponse
     """
-    if not request.user.is_staff:
+    if not request.user.is_staff and not request.user.is_superuser:
         return JsonResponse({'ok': False, 'err_msg': '无权限'}, status=403)
     try:
         group_id = int(request.POST.get('group_id', 0))
@@ -280,7 +280,7 @@ def group_role_remove(request: HttpRequest) -> JsonResponse:
     :return: JSON 响应
     :rtype: JsonResponse
     """
-    if not request.user.is_staff:
+    if not request.user.is_staff and not request.user.is_superuser:
         return JsonResponse({'ok': False, 'err_msg': '无权限'}, status=403)
     try:
         group_id = int(request.POST.get('group_id', 0))

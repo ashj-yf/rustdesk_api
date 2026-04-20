@@ -23,7 +23,7 @@ def group_list(request: HttpRequest) -> JsonResponse:
     :return: JSON 响应，形如 {"ok": true, "data": [...]}
     :rtype: JsonResponse
     """
-    if not request.user.is_staff:
+    if not request.user.is_staff and not request.user.is_superuser:
         return JsonResponse({'ok': False, 'err_msg': '无权限'}, status=403)
     q = (request.GET.get('q') or '').strip()
     group_service = GroupService()
@@ -50,7 +50,7 @@ def group_create(request: HttpRequest) -> JsonResponse:
     :return: JSON 响应
     :rtype: JsonResponse
     """
-    if not request.user.is_staff:
+    if not request.user.is_staff and not request.user.is_superuser:
         return JsonResponse({'ok': False, 'err_msg': '无权限'}, status=403)
     name = (request.POST.get('name') or '').strip()
     if not name:
@@ -75,7 +75,7 @@ def group_update(request: HttpRequest) -> JsonResponse:
     :return: JSON 响应
     :rtype: JsonResponse
     """
-    if not request.user.is_staff:
+    if not request.user.is_staff and not request.user.is_superuser:
         return JsonResponse({'ok': False, 'err_msg': '无权限'}, status=403)
     try:
         group_id = int(request.POST.get('group_id', 0))
@@ -108,7 +108,7 @@ def group_delete(request: HttpRequest) -> JsonResponse:
     :return: JSON 响应
     :rtype: JsonResponse
     """
-    if not request.user.is_staff:
+    if not request.user.is_staff and not request.user.is_superuser:
         return JsonResponse({'ok': False, 'err_msg': '无权限'}, status=403)
     try:
         group_id = int(request.POST.get('group_id', 0))
@@ -131,7 +131,7 @@ def group_members(request: HttpRequest) -> JsonResponse:
     :return: JSON 响应，data 包含成员列表
     :rtype: JsonResponse
     """
-    if not request.user.is_staff:
+    if not request.user.is_staff and not request.user.is_superuser:
         return JsonResponse({'ok': False, 'err_msg': '无权限'}, status=403)
     try:
         group_id = int(request.GET.get('group_id', 0))
@@ -158,7 +158,7 @@ def group_add_member(request: HttpRequest) -> JsonResponse:
     :return: JSON 响应
     :rtype: JsonResponse
     """
-    if not request.user.is_staff:
+    if not request.user.is_staff and not request.user.is_superuser:
         return JsonResponse({'ok': False, 'err_msg': '无权限'}, status=403)
     try:
         group_id = int(request.POST.get('group_id', 0))
@@ -191,7 +191,7 @@ def group_remove_member(request: HttpRequest) -> JsonResponse:
     :return: JSON 响应
     :rtype: JsonResponse
     """
-    if not request.user.is_staff:
+    if not request.user.is_staff and not request.user.is_superuser:
         return JsonResponse({'ok': False, 'err_msg': '无权限'}, status=403)
     try:
         group_id = int(request.POST.get('group_id', 0))

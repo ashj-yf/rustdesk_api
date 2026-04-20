@@ -16,7 +16,7 @@ def update_user(request: HttpRequest) -> JsonResponse:
     :param request: POST，包含 username, full_name(可选), email(可选), is_staff(可选: '1'/'0')
     :return: {"ok": true}
     """
-    if not request.user.is_staff:
+    if not request.user.is_staff and not request.user.is_superuser:
         return JsonResponse({'ok': False, 'err_msg': '无权限'}, status=403)
     username = (request.POST.get('username') or '').strip()
     if not username:
@@ -59,7 +59,7 @@ def reset_user_password(request: HttpRequest) -> JsonResponse:
     :param request: POST，包含 username, password1, password2
     :return: {"ok": true}
     """
-    if not request.user.is_staff:
+    if not request.user.is_staff and not request.user.is_superuser:
         return JsonResponse({'ok': False, 'err_msg': '无权限'}, status=403)
     username = (request.POST.get('username') or '').strip()
     password1 = (request.POST.get('password1') or '').strip()
@@ -89,7 +89,7 @@ def delete_user(request: HttpRequest) -> JsonResponse:
     :param request: POST，包含 username
     :return: {"ok": true}
     """
-    if not request.user.is_staff:
+    if not request.user.is_staff and not request.user.is_superuser:
         return JsonResponse({'ok': False, 'err_msg': '无权限'}, status=403)
     username = (request.POST.get('username') or '').strip()
     if not username:
@@ -114,7 +114,7 @@ def create_user(request: HttpRequest) -> JsonResponse:
     :param request: POST，包含 username, password1, password2, full_name(可选), email(可选), is_staff(可选: '1'/'0')
     :return: {"ok": true}
     """
-    if not request.user.is_staff:
+    if not request.user.is_staff and not request.user.is_superuser:
         return JsonResponse({'ok': False, 'err_msg': '无权限'}, status=403)
 
     username = (request.POST.get('username') or '').strip()

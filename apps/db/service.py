@@ -1425,12 +1425,12 @@ class DeviceGroupService(BaseService):
         """
         获取用户可访问的设备组（基于全局权限）
 
-        Super admin 或拥有 VIEW 权限时返回所有设备组，否则返回空列表。
+        拥有 VIEW 权限时返回所有设备组，否则返回空列表。
 
         :param user: 用户对象
         :return: 设备组列表
         """
-        if user.is_superuser or PermissionService().has_perm(user, DevicePermission.VIEW):
+        if PermissionService().has_perm(user, DevicePermission.VIEW):
             return list(self.db.objects.all())
         return []
 
@@ -1564,10 +1564,19 @@ class RoleService(BaseService):
         :return: 默认角色对象
         :rtype: Role
         """
-        role, _ = self.db.objects.get_or_create(
+        role, created = self.db.objects.get_or_create(
             name="default",
-            defaults={"note": "默认角色", "is_default": True},
+            defaults={
+                "note": "默认角色",
+                "is_default": True,
+                "permission": DevicePermission.FULL,
+            },
         )
+        # 确保现有默认角色有完整权限
+        if not created and role.permission != DevicePermission.FULL:
+            role.permission = DevicePermission.FULL
+            role.save()
+            logger.info(f"更新默认角色权限为完整权限")
         return role
 
     def list_roles(self):
@@ -1799,4 +1808,6 @@ class PermissionService(BaseService):
         :return: 是否拥有权限
         :rtype: bool
         """
+        if user.is_superuser:
+            return True
         return (self.get_user_effective_perm(user) & perm_flag) == perm_flag
