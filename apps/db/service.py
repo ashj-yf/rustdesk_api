@@ -698,7 +698,25 @@ class LoginClientService(BaseService):
         logger.info(f"更新登录状态: {username} - {uuid}")
 
     def update_logout_status(self, username, uuid, peer_id=None):
+        """
+        更新登出状态
+
+        :param username: 用户名或用户对象
+        :param uuid: 设备UUID
+        :param peer_id: 设备ID（可选）
+        """
         user_qs = self.get_user_info(username)
+
+        if not user_qs:
+            # 用户不存在，尝试直接通过 uuid 更新登出状态
+            logger.warning(f"用户不存在，尝试直接更新登出状态: {username} - {uuid}")
+            update_count = self.db.objects.filter(uuid=uuid).update(login_status=False)
+            if update_count > 0:
+                logger.info(f"通过 uuid 更新登出状态成功: {uuid}")
+            else:
+                logger.warning(f"未找到登录记录: {uuid}")
+            return
+            
         if not self.db.objects.filter(user_id=user_qs.id, uuid=uuid).update(
                 user=user_qs,
                 uuid=uuid,
@@ -710,15 +728,26 @@ class LoginClientService(BaseService):
                 uuid=uuid,
                 login_status=True
             ).first()
-            self.db.objects.create(
-                user=user_qs,
-                uuid=uuid,
-                peer_id=peer_id,
-                login_status=False,
-                client_type=login_qs.client_type,
-                platform=login_qs.platform,
-                client_name=login_qs.client_name,
-            )
+            if login_qs:
+                self.db.objects.create(
+                    user=user_qs,
+                    uuid=uuid,
+                    peer_id=peer_id,
+                    login_status=False,
+                    client_type=login_qs.client_type,
+                    platform=login_qs.platform,
+                    client_name=login_qs.client_name,
+                )
+            else:
+                self.db.objects.create(
+                    user=user_qs,
+                    uuid=uuid,
+                    peer_id=peer_id,
+                    login_status=False,
+                    client_type=self.db.CLIENT_TYPE_CLIENT,
+                    platform=None,
+                    client_name='',
+                )
 
         logger.info(f"更新登出状态: {username} - {uuid}")
 
