@@ -1425,12 +1425,12 @@ class DeviceGroupService(BaseService):
         """
         获取用户可访问的设备组（基于全局权限）
 
-        拥有 VIEW 权限时返回所有设备组，否则返回空列表。
+        Super admin 或拥有 VIEW 权限时返回所有设备组，否则返回空列表。
 
         :param user: 用户对象
         :return: 设备组列表
         """
-        if PermissionService().has_perm(user, DevicePermission.VIEW):
+        if user.is_superuser or PermissionService().has_perm(user, DevicePermission.VIEW):
             return list(self.db.objects.all())
         return []
 
