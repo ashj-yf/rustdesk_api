@@ -32,10 +32,10 @@ def forwards(apps, schema_editor):
     if to_create:
         DeviceGroupPeer.objects.bulk_create(to_create, ignore_conflicts=True)
 
-    # 2) 创建 default 角色，默认拥有完整权限
+    # 2) 创建 default 角色
     default_role, _ = Role.objects.get_or_create(
         name="default",
-        defaults={"note": "默认角色", "is_default": True, "permission": 15},
+        defaults={"note": "默认角色", "is_default": True},
     )
 
     # 3) 为所有活跃用户绑定 default 角色
